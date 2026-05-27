@@ -1,0 +1,143 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+
+export type BrowseEntry = {
+  name: string;
+  path: string;
+  isEmpty: boolean;
+  hidden: boolean;
+};
+
+export type Shortcut = { label: string; path: string };
+
+const FORBIDDEN_PREFIXES = [
+  "/etc",
+  "/var",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/System",
+  "/private",
+  "/dev",
+  "/Library",
+];
+
+/** Expand `~` and resolve to absolute path. */
+export function expandPath(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return os.homedir();
+  const expanded = trimmed.startsWith("~")
+    ? path.join(os.homedir(), trimmed.slice(1))
+    : trimmed;
+  return path.resolve(expanded);
+}
+
+/** Block paths that the user shouldn't be poking at via the picker. */
+export function assertBrowsable(abs: string): void {
+  if (!path.isAbsolute(abs)) {
+    throw new Error("절대 경로여야 합니다.");
+  }
+  const home = os.homedir();
+  // Outside HOME → forbidden (keeps things tidy & avoids confusion for
+  // multi-user deployments where the picker shouldn't expose admin files).
+  if (abs !== home && !abs.startsWith(`${home}/`)) {
+    throw new Error("홈 디렉토리 밖은 탐색할 수 없습니다.");
+  }
+  for (const p of FORBIDDEN_PREFIXES) {
+    if (abs === p || abs.startsWith(`${p}/`)) {
+      throw new Error(`시스템 경로는 접근할 수 없습니다: ${abs}`);
+    }
+  }
+}
+
+export const DEFAULT_SHORTCUTS: Shortcut[] = [
+  { label: "홈", path: os.homedir() },
+  { label: "Documents", path: path.join(os.homedir(), "Documents") },
+  { label: "Desktop", path: path.join(os.homedir(), "Desktop") },
+  { label: "Downloads", path: path.join(os.homedir(), "Downloads") },
+  { label: "Development", path: path.join(os.homedir(), "Development") },
+  { label: "dscode-projects", path: path.join(os.homedir(), "dscode-projects") },
+];
+
+export async function browseDir(absInput?: string): Promise<{
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+  shortcuts: Shortcut[];
+}> {
+  const abs = absInput ? expandPath(absInput) : os.homedir();
+  assertBrowsable(abs);
+
+  let raw: import("node:fs").Dirent[];
+  try {
+    raw = await fs.readdir(abs, { withFileTypes: true });
+  } catch (e) {
+    throw new Error(
+      `폴더를 읽을 수 없습니다: ${abs} (${e instanceof Error ? e.message : e})`,
+    );
+  }
+
+  const entries: BrowseEntry[] = [];
+  for (const e of raw) {
+    if (!e.isDirectory()) continue;
+    const full = path.join(abs, e.name);
+    // We may not be allowed to peek into every subdir; treat unreadable as empty.
+    let isEmpty = true;
+    try {
+      const inner = await fs.readdir(full);
+      isEmpty = inner.length === 0;
+    } catch {
+      isEmpty = true;
+    }
+    entries.push({
+      name: e.name,
+      path: full,
+      isEmpty,
+      hidden: e.name.startsWith("."),
+    });
+  }
+  entries.sort((a, b) => {
+    if (a.hidden !== b.hidden) return a.hidden ? 1 : -1;
+    return a.name.localeCompare(b.name, "ko");
+  });
+
+  const home = os.homedir();
+  const parent = abs === home ? null : path.dirname(abs);
+
+  // Filter shortcuts down to ones that actually exist on this box.
+  const existingShortcuts: Shortcut[] = [];
+  for (const s of DEFAULT_SHORTCUTS) {
+    try {
+      const stat = await fs.stat(s.path);
+      if (stat.isDirectory()) existingShortcuts.push(s);
+    } catch {
+      // skip
+    }
+  }
+
+  return { path: abs, parent, entries, shortcuts: existingShortcuts };
+}
+
+/** Create a new directory under `parent`. Returns the new absolute path. */
+export async function makeDir(parentInput: string, name: string): Promise<string> {
+  const parent = expandPath(parentInput);
+  assertBrowsable(parent);
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error("폴더 이름이 필요합니다.");
+  if (/[\/\\]/.test(cleanName) || cleanName === "." || cleanName === "..") {
+    throw new Error("폴더 이름에 사용할 수 없는 문자입니다.");
+  }
+  if (cleanName.length > 100) throw new Error("폴더 이름이 너무 깁니다.");
+  const full = path.join(parent, cleanName);
+  assertBrowsable(full);
+  try {
+    await fs.mkdir(full, { recursive: false });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error("같은 이름의 폴더가 이미 있습니다.");
+    }
+    throw e;
+  }
+  return full;
+}
