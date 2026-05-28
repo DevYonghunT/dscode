@@ -35,10 +35,10 @@ export function Header({
       <div className="flex items-center gap-3">
         <Emblem size={32} className="h-8 w-8 shrink-0" />
         <div className="flex items-baseline gap-2">
-          <span className="font-display text-lg font-semibold tracking-tight text-navy">
+          <span className="font-display text-lg font-semibold tracking-tight text-fg">
             Duksoo Code
           </span>
-          <span className="rounded-full bg-navy/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy">
+          <span className="rounded-full bg-navy/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg">
             DS Code
           </span>
         </div>

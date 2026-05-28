@@ -125,7 +125,7 @@ export function Chat({
       {isDragging && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-navy/10 backdrop-blur-sm">
           <div className="rounded-2xl border-2 border-dashed border-gold bg-bg-elevated px-8 py-6 shadow-lg">
-            <p className="text-center font-display text-base font-semibold text-navy">
+            <p className="text-center font-display text-base font-semibold text-fg">
               여기에 놓아 첨부
             </p>
             <p className="mt-1 text-xs text-fg-muted">이미지·텍스트·PDF 지원</p>
@@ -255,7 +255,7 @@ function EmptyState({ onPick }: { onPick: (s: string) => void }) {
         <Emblem size={48} className="block h-12 w-12" />
       </div>
       <div>
-        <h2 className="font-display text-2xl font-semibold tracking-tight text-navy">
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-fg">
           무엇을 도와드릴까요?
         </h2>
         <p className="mt-1 text-sm text-fg-muted">

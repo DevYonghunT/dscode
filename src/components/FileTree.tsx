@@ -164,7 +164,7 @@ function ProjectGroup({
             />
           )}
           <span
-            className={`truncate text-sm ${active ? "font-medium text-navy" : "text-fg-muted"}`}
+            className={`truncate text-sm ${active ? "font-medium text-fg" : "text-fg-muted"}`}
           >
             {project.name}
           </span>
@@ -282,7 +282,7 @@ function TreeRow({
         }}
         className={`group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm transition-colors ${
           isSelected
-            ? "bg-navy/10 text-navy"
+            ? "bg-navy/10 text-fg"
             : "text-fg-muted hover:bg-bg-sunken hover:text-fg"
         }`}
         style={{ paddingLeft: `${depth * 12 + 6}px` }}

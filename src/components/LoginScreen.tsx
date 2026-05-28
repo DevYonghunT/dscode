@@ -62,7 +62,7 @@ export function LoginScreen() {
             <Emblem size={56} className="h-14 w-14" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-navy">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-fg">
               Duksoo Code
             </h1>
             <p className="mt-0.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
@@ -73,7 +73,7 @@ export function LoginScreen() {
 
         <div className="rounded-2xl border border-border bg-bg-elevated p-6 shadow-sm">
           <p className="mb-4 text-center text-sm text-fg-muted">
-            <span className="font-semibold text-navy">@duksoo.hs.kr</span> 학교 계정으로만
+            <span className="font-semibold text-fg">@duksoo.hs.kr</span> 학교 계정으로만
             <br />
             접속할 수 있습니다.
           </p>
@@ -81,7 +81,7 @@ export function LoginScreen() {
           <button
             onClick={go}
             disabled={busy}
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-border bg-white text-sm font-medium text-fg shadow-sm transition-all hover:border-border-strong hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-border bg-bg-elevated text-sm font-medium text-fg shadow-sm transition-all hover:border-border-strong hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin text-fg-muted" />

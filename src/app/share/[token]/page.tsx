@@ -95,7 +95,7 @@ export default function SharePage({
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated p-2 shadow-sm ring-1 ring-border">
           <Emblem size={40} className="h-10 w-10" />
         </div>
-        <h1 className="mt-4 font-display text-xl font-semibold text-navy">
+        <h1 className="mt-4 font-display text-xl font-semibold text-fg">
           Duksoo Code
         </h1>
         <div className="mt-4 max-w-sm rounded-xl border border-danger/30 bg-red-50 px-4 py-3 text-center text-sm text-danger">
@@ -119,10 +119,10 @@ export default function SharePage({
         <div className="flex items-center gap-3">
           <Emblem size={32} className="h-8 w-8" />
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-lg font-semibold tracking-tight text-navy">
+            <span className="font-display text-lg font-semibold tracking-tight text-fg">
               {data.projectName}
             </span>
-            <span className="rounded-full bg-navy/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy">
+            <span className="rounded-full bg-navy/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg">
               공유 (읽기 전용)
             </span>
           </div>
@@ -210,7 +210,7 @@ function ShareTreeRow({
         onClick={() => (isDir ? setOpen((o) => !o) : onSelect(node.path))}
         className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm transition-colors ${
           isSelected
-            ? "bg-navy/10 text-navy"
+            ? "bg-navy/10 text-fg"
             : "text-fg-muted hover:bg-bg-sunken hover:text-fg"
         }`}
         style={{ paddingLeft: `${depth * 12 + 12}px` }}

@@ -142,7 +142,7 @@ export function FolderPickerModal({
       >
         {/* Title */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <h3 className="font-display text-sm font-semibold text-navy">
+          <h3 className="font-display text-sm font-semibold text-fg">
             폴더 선택
           </h3>
           <button
@@ -166,7 +166,7 @@ export function FolderPickerModal({
                 key={s.path}
                 type="button"
                 onClick={() => load(s.path)}
-                className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-border-strong hover:text-navy"
+                className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
                 title={s.path}
               >
                 {s.label === "홈" && <Home className="h-2.5 w-2.5" />}
@@ -182,7 +182,7 @@ export function FolderPickerModal({
             type="button"
             onClick={() => data?.parent && load(data.parent)}
             disabled={!data?.parent}
-            className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-fg-subtle hover:bg-bg-sunken hover:text-navy disabled:cursor-not-allowed disabled:opacity-30"
+            className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-fg-subtle hover:bg-bg-sunken hover:text-fg disabled:cursor-not-allowed disabled:opacity-30"
             title="상위 폴더"
             aria-label="상위 폴더"
           >
@@ -196,7 +196,7 @@ export function FolderPickerModal({
               <button
                 type="button"
                 onClick={() => load(seg.path)}
-                className="rounded px-1 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-bg-sunken hover:text-navy"
+                className="rounded px-1 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-bg-sunken hover:text-fg"
               >
                 {seg.label}
               </button>
@@ -275,7 +275,7 @@ export function FolderPickerModal({
                   setNewFolderName("");
                   setCreateError(null);
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-bg hover:text-navy"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-bg hover:text-fg"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>여기에 새 폴더 만들기</span>

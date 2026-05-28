@@ -163,7 +163,7 @@ export function ToolCallCard({ call, onFilePathClick }: CardProps) {
           )}
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="shrink-0 text-xs font-medium text-navy">{label}</span>
+          <span className="shrink-0 text-xs font-medium text-fg">{label}</span>
           {filePath && onFilePathClick ? (
             <span
               role="button"
@@ -278,7 +278,7 @@ function RichPreview({
               >
                 <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-fg-subtle group-hover:text-gold-deep" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-navy group-hover:text-gold-deep group-hover:underline">
+                  <span className="block truncate font-medium text-fg group-hover:text-gold-deep group-hover:underline">
                     {it.title}
                   </span>
                   <span className="block truncate font-mono text-[10px] text-fg-subtle">

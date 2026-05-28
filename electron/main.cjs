@@ -14,7 +14,7 @@
 //   DSCODE_PROXY_BASE_URL       — 학교 프록시 URL. 기본 dev=localhost, prod=학교 도메인
 //   DSCODE_URL                  — 외부 URL 강제 사용 (Next 자동 spawn skip)
 
-const { app, BrowserWindow, Menu, shell, ipcMain, safeStorage, dialog } = require('electron')
+const { app, BrowserWindow, Menu, shell, ipcMain, safeStorage, dialog, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const http = require('node:http')
@@ -172,7 +172,7 @@ function createMainWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'DS Code',
-    backgroundColor: '#0f172a',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f0f11' : '#f8fafc',
     webPreferences: {
       contextIsolation: true,
       sandbox: true,

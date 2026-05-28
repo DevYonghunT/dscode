@@ -259,7 +259,7 @@ function ResultRow({
       onClick={onClick}
       onMouseEnter={onHover}
       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-        active ? "bg-navy/5 text-navy" : "text-fg-muted hover:bg-bg-sunken"
+        active ? "bg-navy/5 text-fg" : "text-fg-muted hover:bg-bg-sunken"
       }`}
     >
       {children}

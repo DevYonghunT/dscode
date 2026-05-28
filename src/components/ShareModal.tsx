@@ -117,7 +117,7 @@ export function ShareModal({ projectId, projectName, onClose }: Props) {
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <Share2 className="h-4 w-4 text-gold" />
-            <h2 className="font-display text-base font-semibold text-navy">
+            <h2 className="font-display text-base font-semibold text-fg">
               공유 — {projectName}
             </h2>
           </div>
@@ -132,7 +132,7 @@ export function ShareModal({ projectId, projectName, onClose }: Props) {
 
         <div className="space-y-3 overflow-y-auto px-5 py-4">
           <div className="rounded-lg border border-border bg-bg p-3 text-xs text-fg-muted">
-            <p className="font-medium text-navy">
+            <p className="font-medium text-fg">
               <Eye className="-mt-0.5 mr-1 inline h-3.5 w-3.5" />
               읽기 전용 링크
             </p>

@@ -70,7 +70,7 @@ export function ProjectSwitcher({
           title="프로젝트 전환"
         >
           <FolderGit2 className="h-3.5 w-3.5 text-gold" />
-          <span className="max-w-[200px] truncate text-xs font-medium text-navy">
+          <span className="max-w-[200px] truncate text-xs font-medium text-fg">
             {active?.name || "프로젝트"}
           </span>
           <ChevronDown
@@ -104,7 +104,7 @@ export function ProjectSwitcher({
                 setCreating(true);
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-xs font-medium text-navy transition-colors hover:bg-bg-sunken"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-xs font-medium text-fg transition-colors hover:bg-bg-sunken"
             >
               <Plus className="h-3.5 w-3.5" />
               새 프로젝트 추가
@@ -179,7 +179,7 @@ function ProjectRow({
           />
         )}
         <span
-          className={`truncate ${active ? "font-medium text-navy" : "text-fg-muted"}`}
+          className={`truncate ${active ? "font-medium text-fg" : "text-fg-muted"}`}
         >
           {project.name}
         </span>
@@ -226,7 +226,7 @@ function ProjectRow({
             href={apiUrl(
               `/api/projects/${encodeURIComponent(project.id)}/export`,
             )}
-            className="flex h-6 w-6 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-bg-sunken hover:text-navy"
+            className="flex h-6 w-6 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-bg-sunken hover:text-fg"
             title="zip 다운로드"
             aria-label="zip 다운로드"
           >
@@ -362,7 +362,7 @@ function CreateProjectModal({
         className="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-lg"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="font-display text-base font-semibold text-navy">
+          <h2 className="font-display text-base font-semibold text-fg">
             새 프로젝트
           </h2>
           <button
@@ -479,7 +479,7 @@ function CreateProjectModal({
               <button
                 type="button"
                 onClick={() => setPickerOpen(true)}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-2 text-xs font-medium text-fg-muted transition-colors hover:border-border-strong hover:bg-bg-sunken hover:text-navy"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-bg-elevated px-2.5 py-2 text-xs font-medium text-fg-muted transition-colors hover:border-border-strong hover:bg-bg-sunken hover:text-fg"
                 title="폴더 선택기 열기"
               >
                 <FolderSearch className="h-3.5 w-3.5" />
@@ -558,7 +558,7 @@ function ModeOption({
       onClick={onSelect}
       className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-3 text-center transition-all ${
         selected
-          ? "border-navy bg-navy/5 text-navy shadow-sm"
+          ? "border-navy bg-navy/5 text-fg shadow-sm"
           : "border-border bg-bg text-fg-muted hover:border-border-strong hover:bg-bg-sunken"
       }`}
     >

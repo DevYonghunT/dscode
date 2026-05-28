@@ -13,8 +13,13 @@ import {
   Rocket,
   ExternalLink,
   Loader2,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
 } from "lucide-react";
 import { apiUrl } from "@/lib/client/url";
+import { useTheme, type ThemePreference } from "@/lib/client/theme";
 
 type Props = {
   open: boolean;
@@ -104,7 +109,7 @@ export function SettingsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/30 px-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-lg">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="font-display text-base font-semibold text-navy">계정 · 워크스페이스</h2>
+          <h2 className="font-display text-base font-semibold text-fg">계정 · 워크스페이스</h2>
           <button
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-bg-sunken hover:text-fg"
@@ -132,20 +137,33 @@ export function SettingsModal({
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-navy">{email}</div>
+              <div className="truncate text-sm font-medium text-fg">{email}</div>
               <div className="text-[11px] text-fg-subtle">덕수고등학교 계정으로 인증됨</div>
             </div>
+          </section>
+
+          {/* Theme */}
+          <section>
+            <div className="mb-2 flex items-center gap-2">
+              <Palette className="h-4 w-4 text-gold" />
+              <h3 className="text-sm font-semibold text-fg">테마</h3>
+            </div>
+            <p className="mb-3 text-xs text-fg-muted">
+              앱 전체 색상 테마를 선택하세요. <span className="font-medium text-fg">시스템</span>은
+              운영체제의 라이트/다크 설정을 따라갑니다.
+            </p>
+            <ThemePicker />
           </section>
 
           {/* Active project workspace */}
           <section>
             <div className="mb-2 flex items-center gap-2">
               <FolderOpen className="h-4 w-4 text-gold" />
-              <h3 className="text-sm font-semibold text-navy">활성 프로젝트 폴더</h3>
+              <h3 className="text-sm font-semibold text-fg">활성 프로젝트 폴더</h3>
             </div>
             <p className="mb-3 text-xs text-fg-muted">
               현재 선택된 프로젝트의 디스크 경로입니다. 다른 기기에서 같은 계정으로
-              로그인해도 <span className="font-semibold text-navy">같은 파일과 대화 이력</span>이 유지됩니다.
+              로그인해도 <span className="font-semibold text-fg">같은 파일과 대화 이력</span>이 유지됩니다.
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded-lg border border-border bg-bg px-3 py-2 font-mono text-[11px] text-fg-muted">
@@ -170,7 +188,7 @@ export function SettingsModal({
 
           {/* Integrations */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy">통합 (Integrations)</h3>
+            <h3 className="mb-2 text-sm font-semibold text-fg">통합 (Integrations)</h3>
             <p className="mb-3 text-xs text-fg-muted">
               토큰을 등록하면 채팅에서 자연어로 GitHub 푸시·Vercel 배포가 가능해집니다.
               토큰은 서버에 AES-256으로 암호화되어 저장됩니다.
@@ -199,7 +217,7 @@ export function SettingsModal({
 
           {/* Danger */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-navy">위험 구역</h3>
+            <h3 className="text-sm font-semibold text-fg">위험 구역</h3>
             {confirmReset ? (
               <div className="space-y-2 rounded-lg border border-danger/30 bg-red-50 p-3">
                 <p className="text-xs text-danger">
@@ -330,7 +348,7 @@ function IntegrationCard({
           <Icon className="h-3.5 w-3.5" />
         </div>
         <div className="flex-1">
-          <div className="text-sm font-medium text-navy">{label}</div>
+          <div className="text-sm font-medium text-fg">{label}</div>
           <div className="text-[11px] text-fg-subtle">
             {connected ? `연결됨 · ${state?.masked}` : "미연결"}
           </div>
@@ -401,4 +419,37 @@ function IntegrationCard({
       )}
     </div>
   );
+}
+
+function ThemePicker() {
+  const { pref, change } = useTheme()
+  const options: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
+    { id: 'system', label: '시스템', icon: Monitor },
+    { id: 'light', label: '라이트', icon: Sun },
+    { id: 'dark', label: '다크', icon: Moon },
+  ]
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {options.map((o) => {
+        const Icon = o.icon
+        const selected = pref === o.id
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => change(o.id)}
+            className={`flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-xs transition-colors ${
+              selected
+                ? 'border-navy-soft bg-navy text-white'
+                : 'border-border bg-bg text-fg-muted hover:border-border-strong hover:bg-bg-sunken hover:text-fg'
+            }`}
+            aria-pressed={selected}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="font-medium">{o.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }

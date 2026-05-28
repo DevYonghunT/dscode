@@ -153,7 +153,7 @@ function ProjectGroup({
             />
           )}
           <span
-            className={`truncate text-sm ${expanded ? "font-medium text-navy" : "text-fg-muted"}`}
+            className={`truncate text-sm ${expanded ? "font-medium text-fg" : "text-fg-muted"}`}
           >
             {project.name}
           </span>
@@ -193,7 +193,7 @@ function ProjectGroup({
                       onClick={() => onSelectSession(s.id)}
                       className={`group/sess flex w-full items-start gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors ${
                         active
-                          ? "bg-navy/10 text-navy"
+                          ? "bg-navy/10 text-fg"
                           : "text-fg-muted hover:bg-bg-sunken hover:text-fg"
                       }`}
                       title={`${s.id}\n${new Date(s.updatedAt).toLocaleString("ko-KR")}`}

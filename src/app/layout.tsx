@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { themeBootstrapScript } from "@/lib/client/theme";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -35,6 +36,8 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${outfit.variable} ${jetbrains.variable} h-full antialiased`}>
       <head>
+        {/* FOUC 방지: localStorage 의 theme 선호를 페인트 직전에 <html data-theme> 으로 반영 */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"

@@ -40,7 +40,7 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
         type="button"
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
-        className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
         title={`모델: ${active.label}`}
       >
         <Sparkles className="h-2.5 w-2.5 text-gold" />
@@ -75,7 +75,7 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
                       }`}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-medium text-navy">
+                      <span className="block text-xs font-medium text-fg">
                         {m.label}
                       </span>
                       <span className="mt-0.5 block text-[11px] leading-snug text-fg-muted">
