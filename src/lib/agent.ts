@@ -184,6 +184,11 @@ export async function* runAgent(
     // Force the CLI to use API-key auth: isolated config dir, no OAuth tokens,
     // no Bedrock/Vertex hijacking.
     ANTHROPIC_CONFIG_DIR: `${workspaceRoot}/.dscode-cli-config`,
+    // Optional school-proxy endpoint. When set, the CLI talks to the proxy
+    // (which injects the real API key server-side) instead of api.anthropic.com.
+    ...(process.env.ANTHROPIC_BASE_URL
+      ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL }
+      : {}),
     CLAUDE_CODE_SKIP_BEDROCK_AUTH: "1",
     CLAUDE_CODE_SKIP_VERTEX_AUTH: "1",
     CLAUDE_CODE_SKIP_FOUNDRY_AUTH: "1",
