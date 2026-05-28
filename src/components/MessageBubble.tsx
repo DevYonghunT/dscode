@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { User, AlertCircle } from "lucide-react";
+import { User, AlertCircle, Copy, Check } from "lucide-react";
 import type { ChatTurn } from "@/lib/client/types";
 import { ToolCallCard } from "./ToolCallView";
 import { Emblem } from "./Emblem";
@@ -92,12 +93,13 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
         )}
         {turn.text || turn.toolCalls.length > 0 ? (
           <div
-            className={`rounded-2xl px-4 py-3 ${
+            className={`group/bubble relative rounded-2xl px-4 py-3 ${
               isUser
                 ? "bg-navy text-white"
                 : "bg-bg-elevated border border-border"
             }`}
           >
+            {turn.text && <CopyButton text={turn.text} isUser={isUser} /> }
             {turn.text && (
               <div
                 className={`prose-chat text-sm ${
@@ -144,6 +146,37 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
       )}
     </div>
   );
+}
+
+function CopyButton({ text, isUser }: { text: string; isUser: boolean }) {
+  const [copied, setCopied] = useState(false)
+  async function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard 거부 — 조용히 무시 */
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? "복사됨" : "복사"}
+      aria-label={copied ? "복사됨" : "메시지 복사"}
+      className={`absolute -top-2 ${
+        isUser ? "-left-2" : "-right-2"
+      } flex h-6 w-6 items-center justify-center rounded-md border opacity-0 transition group-hover/bubble:opacity-100 ${
+        isUser
+          ? "border-navy-soft bg-navy text-white/80 hover:bg-navy-soft hover:text-white"
+          : "border-border bg-bg-elevated text-fg-muted hover:bg-bg-sunken hover:text-fg"
+      }`}
+    >
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+    </button>
+  )
 }
 
 function childToText(node: React.ReactNode): string {

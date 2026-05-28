@@ -18,7 +18,11 @@
 /out/
 
 # production
-/build
+/build/*
+!/build/icon.png
+
+# electron-builder 출력 (.dmg, .exe 등 큰 인스톨러)
+/dist-electron/
 
 # misc
 .DS_Store

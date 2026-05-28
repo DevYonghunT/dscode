@@ -255,7 +255,7 @@ function ProjectRow({
   );
 }
 
-type SourceMode = "empty" | "git" | "external";
+type SourceMode = "git" | "external";
 
 /** Slugify the user-typed name into something safe for a folder name. */
 function nameToSlug(name: string): string {
@@ -276,7 +276,7 @@ function CreateProjectModal({
   onClose: () => void;
   onCreated: () => void | Promise<void>;
 }) {
-  const [mode, setMode] = useState<SourceMode>("empty");
+  const [mode, setMode] = useState<SourceMode>("external");
   const [name, setName] = useState("");
   const [folderPath, setFolderPath] = useState("");
   const [pathEdited, setPathEdited] = useState(false);
@@ -352,10 +352,8 @@ function CreateProjectModal({
 
   const pathHint =
     mode === "external"
-      ? "이미 존재하는 폴더의 절대 경로를 입력하세요."
-      : mode === "git"
-        ? "비어있어야 합니다. 없으면 자동 생성. git clone이 여기에 파일을 채웁니다."
-        : "비어있어야 합니다. 없으면 자동 생성됩니다.";
+      ? "사용할 폴더 경로를 직접 입력하거나, [폴더 선택] 버튼으로 고르세요. 폴더 선택 창 안에서 새 폴더도 만들 수 있습니다."
+      : "비어있어야 합니다. 없으면 자동 생성. git clone이 여기에 파일을 채웁니다.";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/30 px-4 backdrop-blur-sm">
@@ -382,13 +380,13 @@ function CreateProjectModal({
             <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
               시작 방식
             </span>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               <ModeOption
-                Icon={FolderPlus}
-                label="빈 폴더"
-                hint="새로 만들기"
-                selected={mode === "empty"}
-                onSelect={() => changeMode("empty")}
+                Icon={FolderInput}
+                label="내 컴퓨터"
+                hint="폴더 선택 또는 새로 만들기"
+                selected={mode === "external"}
+                onSelect={() => changeMode("external")}
               />
               <ModeOption
                 Icon={Github}
@@ -396,13 +394,6 @@ function CreateProjectModal({
                 hint="레포 clone"
                 selected={mode === "git"}
                 onSelect={() => changeMode("git")}
-              />
-              <ModeOption
-                Icon={FolderInput}
-                label="기존 폴더"
-                hint="내 컴퓨터 연결"
-                selected={mode === "external"}
-                onSelect={() => changeMode("external")}
               />
             </div>
           </div>
@@ -525,7 +516,7 @@ function CreateProjectModal({
               className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy-soft disabled:opacity-50"
             >
               {busy && <Loader2 className="h-3 w-3 animate-spin" />}
-              {mode === "git" ? "Clone & 만들기" : mode === "external" ? "연결하기" : "만들기"}
+              {mode === "git" ? "Clone & 만들기" : "연결하기"}
             </button>
           </div>
         </div>
@@ -533,7 +524,7 @@ function CreateProjectModal({
 
       {pickerOpen && (
         <FolderPickerModal
-          mode={(mode === "external" ? "existing" : "empty-or-create") as FolderPickerMode}
+          mode={(mode === "git" ? "empty-or-create" : "existing") as FolderPickerMode}
           initialPath={folderPath.trim() || undefined}
           onClose={() => setPickerOpen(false)}
           onPick={(picked) => {
