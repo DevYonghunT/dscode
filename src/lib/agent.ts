@@ -196,6 +196,12 @@ export async function* runAgent(
     CLAUDE_CODE_SKIP_MANTLE_AUTH: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_TELEMETRY: "1",
+    // SSL inspection 환경(학교/백신/방화벽이 HTTPS 가로채기) 대응: OS 인증서 저장소를
+    // 신뢰해 학교 프록시(https) 로의 TLS 가 SELF_SIGNED_CERT_IN_CHAIN 으로 막히지 않게.
+    // 부모(Next) 의 NODE_OPTIONS 를 이어받되 --use-system-ca 를 보장.
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, "--use-system-ca"]
+      .filter(Boolean)
+      .join(" "),
     // Git author identity for commits made by the agent in this user's name.
     GIT_AUTHOR_NAME: emailLocal,
     GIT_AUTHOR_EMAIL: userEmail,

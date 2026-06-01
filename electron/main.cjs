@@ -191,6 +191,12 @@ function buildChildEnv(token) {
     env.NEXTAUTH_URL = env.AUTH_URL
     env.AUTH_TRUST_HOST = 'true'
   }
+
+  // TLS: 학교/백신/방화벽이 HTTPS 를 가로채 자체 서명 CA 를 끼우는 환경(SSL inspection)
+  // 에서 NextAuth 의 Google 토큰 교환 fetch 가 SELF_SIGNED_CERT_IN_CHAIN 으로 실패한다.
+  // Node 24 의 --use-system-ca 로 OS(Windows/macOS) 인증서 저장소(기업 CA 포함)를
+  // 신뢰하게 해 검증을 유지하면서 통과시킨다. (일반 환경에선 표준 CA 라 무해)
+  env.NODE_OPTIONS = `${env.NODE_OPTIONS ? env.NODE_OPTIONS + ' ' : ''}--use-system-ca`
   return env
 }
 
