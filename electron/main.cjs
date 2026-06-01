@@ -37,21 +37,46 @@ const NEXT_MODE = process.env.DSCODE_DEV_MODE === '1' ? 'dev' : 'start'
 const EXTERNAL_URL = process.env.DSCODE_URL
 const PROJECT_ROOT = path.join(__dirname, '..')
 
-/** 특정 포트가 비어있는지(바인딩 가능한지) 검사. */
+/** 특정 포트가 비어있는지(바인딩 가능한지) 검사. 0.0.0.0 으로 바인딩해 IPv4 전체
+ *  점유(예: Python 0.0.0.0:3000)와도 확실히 충돌 감지. */
 function isPortFree(port) {
   return new Promise((resolve) => {
     const srv = net.createServer()
     srv.unref()
     srv.on('error', () => resolve(false))
-    srv.listen(port, '127.0.0.1', () => {
+    srv.listen(port, '0.0.0.0', () => {
       srv.close(() => resolve(true))
     })
   })
 }
 
-/** PORT_POOL 중 비어있는 첫 포트 반환. 다 막혔으면 null. */
+/**
+ * 해당 포트에 이미 HTTP 응답하는 서버가 있는지 검사.
+ * isPortFree(bind 테스트)만으로는 부족하다 — Python http.server 등은 SO_REUSEADDR
+ * 로 떠서 우리 bind 테스트를 통과시키지만, 실제 요청은 그 서버가 가로채 404 를 준다.
+ * 그래서 "응답하는 서버가 없는" 포트를 골라야 한다.
+ */
+function isHttpServerThere(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 700 }, (res) => {
+      res.resume()
+      resolve(true) // 누군가 응답함 = 사용 중
+    })
+    req.on('error', () => resolve(false)) // connection refused = 빈 포트
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(false)
+    })
+  })
+}
+
+/**
+ * PORT_POOL 중 (1) 이미 HTTP 서버가 없고 (2) bind 가능한 첫 포트 반환. 다 막혔으면 null.
+ * 두 조건 모두 봐야 esp32 Python(SO_REUSEADDR) 같은 기존 서버 포트를 피한다.
+ */
 async function pickPoolPort() {
   for (const p of PORT_POOL) {
+    if (await isHttpServerThere(p)) continue // 기존 서버 있음 → skip
     if (await isPortFree(p)) return p
   }
   return null
