@@ -21,27 +21,40 @@ const http = require('node:http')
 const net = require('node:net')
 const path = require('node:path')
 
-// DSCODE_NEXT_PORT 가 명시되면 그 포트 고정. 아니면 부팅 시 빈 포트를 동적으로 찾는다.
-// (학생 노트북에서 3000 이 다른 프로그램에 점유돼도 충돌 없이 동작 — EADDRINUSE 방지)
+// 포트 전략 — OAuth(Google) redirect_uri 가 고정 URL 을 요구하므로, 완전 임의 포트는
+// 쓸 수 없다. 대신 PORT_POOL(3000~3009) 중 비어있는 첫 포트를 선택한다.
+// Google Cloud Console 에 이 10개 포트의 redirect URI 가 모두 등록돼 있어야 한다:
+//   http://localhost:3000/dscode/api/auth/callback/google ... 3009
+// 선택된 포트는 자식 Next 의 AUTH_URL 로 주입돼 NextAuth 콜백도 같은 포트를 쓴다.
+//
+// DSCODE_NEXT_PORT 가 명시되면 그 포트 고정(개발용).
 const FIXED_PORT = process.env.DSCODE_NEXT_PORT
   ? parseInt(process.env.DSCODE_NEXT_PORT, 10)
   : null
-let NEXT_PORT = FIXED_PORT || 3000 // bootstrap() 에서 동적 할당될 수 있음
+const PORT_POOL = [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009]
+let NEXT_PORT = FIXED_PORT || 3000 // bootstrap() 에서 풀 중 빈 포트로 확정
 const NEXT_MODE = process.env.DSCODE_DEV_MODE === '1' ? 'dev' : 'start'
 const EXTERNAL_URL = process.env.DSCODE_URL
 const PROJECT_ROOT = path.join(__dirname, '..')
 
-/** OS 에 0 번 포트를 요청해 비어있는 TCP 포트 하나를 받아 닫고 그 번호를 반환. */
-function findFreePort() {
-  return new Promise((resolve, reject) => {
+/** 특정 포트가 비어있는지(바인딩 가능한지) 검사. */
+function isPortFree(port) {
+  return new Promise((resolve) => {
     const srv = net.createServer()
     srv.unref()
-    srv.on('error', reject)
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close(() => resolve(port))
+    srv.on('error', () => resolve(false))
+    srv.listen(port, '127.0.0.1', () => {
+      srv.close(() => resolve(true))
     })
   })
+}
+
+/** PORT_POOL 중 비어있는 첫 포트 반환. 다 막혔으면 null. */
+async function pickPoolPort() {
+  for (const p of PORT_POOL) {
+    if (await isPortFree(p)) return p
+  }
+  return null
 }
 
 const DEFAULT_PROXY_URL =
@@ -143,6 +156,16 @@ function buildChildEnv(token) {
   }
   // 부모 셸이 심어둘 수 있는 다른 인증/auth 우회 변수도 정리 (CLI 가 OAuth/Bedrock 등으로 새지 않게)
   delete env.ANTHROPIC_AUTH_TOKEN
+
+  // NextAuth 콜백 URL 을 실제 선택된 포트에 맞춘다. 이게 없으면 .env.production 의
+  // 고정 AUTH_URL(3000) 을 쓰는데, 동적 포트면 Google 콜백이 엉뚱한 포트로 가서
+  // ERR_CONNECTION_REFUSED → 로그인 후 흰 화면이 난다.
+  // basePath 까지 포함한 형태여야 NextAuth 가 올바른 redirect_uri 를 만든다.
+  if (!EXTERNAL_URL) {
+    env.AUTH_URL = `http://localhost:${NEXT_PORT}/dscode/api/auth`
+    env.NEXTAUTH_URL = env.AUTH_URL
+    env.AUTH_TRUST_HOST = 'true'
+  }
   return env
 }
 
@@ -303,14 +326,17 @@ function loadErrorPage(url, message) {
 
 async function bootstrapWithToken(token) {
   if (!EXTERNAL_URL) {
-    // 포트가 고정되지 않았으면 빈 포트를 동적으로 확보 (3000 점유 충돌 방지).
+    // 포트가 고정되지 않았으면 PORT_POOL(3000~3009) 중 빈 포트 선택.
+    // OAuth redirect_uri 가 이 포트에 맞아야 하므로 Google Console 에 10개 등록 필수.
     if (!FIXED_PORT) {
-      try {
-        NEXT_PORT = await findFreePort()
-        console.log(`[dscode-electron] picked free port ${NEXT_PORT}`)
-      } catch (e) {
-        console.error('[dscode-electron] findFreePort failed, falling back to 3000:', e)
+      const picked = await pickPoolPort()
+      if (picked) {
+        NEXT_PORT = picked
+        console.log(`[dscode-electron] picked pool port ${NEXT_PORT}`)
+      } else {
+        // 풀 전체가 막힘 — 그래도 3000 으로 시도(에러는 ready 타임아웃으로 안내)
         NEXT_PORT = 3000
+        console.error('[dscode-electron] all pool ports busy, forcing 3000')
       }
     }
     console.log(`[dscode-electron] Next.js (${NEXT_MODE}) on :${NEXT_PORT}, proxy=${PROXY_BASE_URL}`)
