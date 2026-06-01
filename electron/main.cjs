@@ -123,13 +123,26 @@ function clearToken() {
 
 function buildChildEnv(token) {
   const env = { ...process.env }
-  // 부모 쉘의 빈 ANTHROPIC_API_KEY/BASE_URL 트랩 제거
-  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']) {
-    if (env[k] === '') delete env[k]
+  // 학생 배포 앱은 외부(부모 셸) 의 ANTHROPIC_* 를 절대 신뢰하지 않는다.
+  // 학교 프록시 경유 + 학생 토큰을 무조건 강제로 덮어쓴다.
+  //
+  // 이유: 학생/개발자 노트북 셸에 `export ANTHROPIC_BASE_URL=https://api.anthropic.com`
+  // 또는 `export ANTHROPIC_API_KEY=...` 가 있으면, 학생 토큰(dsk_)이 학교 프록시를
+  // 거치지 않고 진짜 api.anthropic.com 으로 직행 → 401 "Invalid API key" 가 난다.
+  // 그래서 외부 값이 무엇이든 무시하고 강제 설정한다.
+  if (token) {
+    env.ANTHROPIC_API_KEY = token
+  } else {
+    // 토큰이 없으면(미설정) 외부 키도 못 쓰게 제거 — settings 창에서 입력받아야 함
+    delete env.ANTHROPIC_API_KEY
   }
-  // 학생 토큰과 학교 프록시 주입. 이미 환경변수로 들어와 있으면 그것 우선.
-  if (token && !env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = token
-  if (PROXY_BASE_URL && !env.ANTHROPIC_BASE_URL) env.ANTHROPIC_BASE_URL = PROXY_BASE_URL
+  if (PROXY_BASE_URL) {
+    env.ANTHROPIC_BASE_URL = PROXY_BASE_URL
+  } else {
+    delete env.ANTHROPIC_BASE_URL
+  }
+  // 부모 셸이 심어둘 수 있는 다른 인증/auth 우회 변수도 정리 (CLI 가 OAuth/Bedrock 등으로 새지 않게)
+  delete env.ANTHROPIC_AUTH_TOKEN
   return env
 }
 
@@ -409,13 +422,31 @@ app.whenReady().then(() => {
   bootstrap()
 })
 
+function killNext() {
+  if (nextProcess && !nextProcess.killed) {
+    try {
+      nextProcess.kill('SIGKILL')
+    } catch {
+      /* 이미 죽음 */
+    }
+  }
+}
+
 app.on('before-quit', () => {
   app.isQuitting = true
-  if (nextProcess && !nextProcess.killed) nextProcess.kill('SIGTERM')
+  killNext()
 })
+// 비정상 종료(창 강제 닫기, 예외 등)에도 자식 Next 가 orphan 으로 남지 않게.
+app.on('will-quit', killNext)
+process.on('exit', killNext)
+process.on('SIGINT', () => { killNext(); process.exit(0) })
+process.on('SIGTERM', () => { killNext(); process.exit(0) })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // 데스크톱 앱: 창 닫으면 종료 (자식 Next 도 같이 정리). macOS 도 동일하게 처리해
+  // dock 에 남아 자식 Next 가 orphan 으로 떠도는 것을 막는다.
+  killNext()
+  app.quit()
 })
 
 app.on('activate', () => {
