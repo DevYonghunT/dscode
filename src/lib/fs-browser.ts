@@ -11,17 +11,16 @@ export type BrowseEntry = {
 
 export type Shortcut = { label: string; path: string };
 
-const FORBIDDEN_PREFIXES = [
-  "/etc",
-  "/var",
-  "/usr",
-  "/bin",
-  "/sbin",
-  "/System",
-  "/private",
-  "/dev",
-  "/Library",
-];
+// 데스크톱 앱(Electron)에서는 학생 본인 PC 전체를 탐색·생성할 수 있어야 한다.
+// main.cjs 가 자식 Next 에 DSCODE_DESKTOP=1 을 주입한다. 서버(멀티유저) 모드에선
+// 이 값이 없어 기존 HOME 제약이 유지된다.
+const DESKTOP_MODE = process.env.DSCODE_DESKTOP === "1";
+
+// 위험한 시스템 경로 차단 (양 모드 공통). OS 별로 다르다.
+const FORBIDDEN_PREFIXES =
+  process.platform === "win32"
+    ? ["C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)", "C:\\ProgramData"]
+    : ["/etc", "/var", "/usr", "/bin", "/sbin", "/System", "/private", "/dev", "/Library"];
 
 /** Expand `~` and resolve to absolute path. */
 export function expandPath(input: string): string {
@@ -38,14 +37,18 @@ export function assertBrowsable(abs: string): void {
   if (!path.isAbsolute(abs)) {
     throw new Error("절대 경로여야 합니다.");
   }
-  const home = os.homedir();
-  // Outside HOME → forbidden (keeps things tidy & avoids confusion for
-  // multi-user deployments where the picker shouldn't expose admin files).
-  if (abs !== home && !abs.startsWith(`${home}/`)) {
-    throw new Error("홈 디렉토리 밖은 탐색할 수 없습니다.");
+  // 서버(멀티유저) 모드에서만 HOME 밖을 막는다. 데스크톱 앱은 본인 PC 전체 허용.
+  if (!DESKTOP_MODE) {
+    const home = os.homedir();
+    if (abs !== home && !abs.startsWith(home + path.sep)) {
+      throw new Error("홈 디렉토리 밖은 탐색할 수 없습니다.");
+    }
   }
+  // 위험 시스템 경로는 양 모드 공통 차단 (대소문자 무시 — Windows 대비).
+  const absLower = abs.toLowerCase();
   for (const p of FORBIDDEN_PREFIXES) {
-    if (abs === p || abs.startsWith(`${p}/`)) {
+    const pl = p.toLowerCase();
+    if (absLower === pl || absLower.startsWith(pl + path.sep)) {
       throw new Error(`시스템 경로는 접근할 수 없습니다: ${abs}`);
     }
   }
@@ -103,7 +106,10 @@ export async function browseDir(absInput?: string): Promise<{
   });
 
   const home = os.homedir();
-  const parent = abs === home ? null : path.dirname(abs);
+  // 데스크톱 모드: 루트(/ 또는 C:\)까지 거슬러 올라갈 수 있게. 서버 모드: HOME 에서 멈춤.
+  const parentDir = path.dirname(abs);
+  const atTop = DESKTOP_MODE ? parentDir === abs : abs === home;
+  const parent = atTop ? null : parentDir;
 
   // Filter shortcuts down to ones that actually exist on this box.
   const existingShortcuts: Shortcut[] = [];

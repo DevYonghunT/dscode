@@ -197,6 +197,10 @@ function buildChildEnv(token) {
   // Node 24 의 --use-system-ca 로 OS(Windows/macOS) 인증서 저장소(기업 CA 포함)를
   // 신뢰하게 해 검증을 유지하면서 통과시킨다. (일반 환경에선 표준 CA 라 무해)
   env.NODE_OPTIONS = `${env.NODE_OPTIONS ? env.NODE_OPTIONS + ' ' : ''}--use-system-ca`
+
+  // 데스크톱 앱: 폴더 픽커가 학생 본인 PC 전체를 탐색·생성할 수 있게 한다.
+  // (서버 모드엔 이 변수가 없어 HOME 밖 차단이 유지된다)
+  env.DSCODE_DESKTOP = '1'
   return env
 }
 

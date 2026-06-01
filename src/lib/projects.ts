@@ -93,12 +93,21 @@ function assertPathAllowed(abs: string): void {
   if (!path.isAbsolute(abs)) {
     throw new Error("절대 경로여야 합니다.");
   }
-  const forbidden = ["/", "/etc", "/var", "/usr", "/bin", "/sbin", "/System"];
-  if (forbidden.includes(abs) || forbidden.some((p) => abs === p || abs.startsWith(`${p}/`))) {
+  const forbidden =
+    process.platform === "win32"
+      ? ["C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)", "C:\\ProgramData"]
+      : ["/etc", "/var", "/usr", "/bin", "/sbin", "/System", "/private", "/dev", "/Library"];
+  const absLower = abs.toLowerCase();
+  if (
+    forbidden.some((p) => {
+      const pl = p.toLowerCase();
+      return absLower === pl || absLower.startsWith(pl + path.sep);
+    })
+  ) {
     throw new Error("시스템 경로는 사용할 수 없습니다.");
   }
   const managed = usersRoot();
-  if (abs === managed || abs.startsWith(`${managed}/`)) {
+  if (abs === managed || abs.startsWith(managed + path.sep)) {
     throw new Error(
       `DScode가 관리하는 폴더(${managed})는 직접 지정할 수 없습니다.`,
     );
