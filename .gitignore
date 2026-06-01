@@ -20,6 +20,7 @@
 # production
 /build/*
 !/build/icon.png
+!/build/entitlements.mac.plist
 
 # electron-builder 출력 (.dmg, .exe 등 큰 인스톨러)
 /dist-electron/
@@ -43,3 +44,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+AuthKey_*.p8

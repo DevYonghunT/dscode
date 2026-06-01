@@ -40,7 +40,12 @@
     "mac": {
       "category": "public.app-category.education",
       "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
-      "identity": null,
+      "identity": "Yonghun Kim (3WPS7QNZV5)",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true,
       "icon": "build/icon.png"
     },
     "dmg": {
@@ -57,7 +62,11 @@
     }
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.153",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.159",
+    "@anthropic-ai/claude-agent-sdk-darwin-arm64": "0.3.159",
+    "@anthropic-ai/claude-agent-sdk-darwin-x64": "0.3.159",
+    "@anthropic-ai/claude-agent-sdk-win32-arm64": "0.3.159",
+    "@anthropic-ai/claude-agent-sdk-win32-x64": "0.3.159",
     "@anthropic-ai/sdk": "^0.98.0",
     "@monaco-editor/react": "^4.7.0",
     "lucide-react": "^0.460.0",
@@ -79,5 +88,17 @@
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@next/swc-darwin-arm64": "16.2.6",
+    "@next/swc-darwin-x64": "16.2.6",
+    "@next/swc-win32-x64-msvc": "16.2.6",
+    "@next/swc-win32-arm64-msvc": "16.2.6"
+  },
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": ["darwin", "win32"],
+      "cpu": ["x64", "arm64"]
+    }
   }
 }

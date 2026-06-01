@@ -18,12 +18,31 @@ const { app, BrowserWindow, Menu, shell, ipcMain, safeStorage, dialog, nativeThe
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const http = require('node:http')
+const net = require('node:net')
 const path = require('node:path')
 
-const NEXT_PORT = parseInt(process.env.DSCODE_NEXT_PORT || '3000', 10)
+// DSCODE_NEXT_PORT 가 명시되면 그 포트 고정. 아니면 부팅 시 빈 포트를 동적으로 찾는다.
+// (학생 노트북에서 3000 이 다른 프로그램에 점유돼도 충돌 없이 동작 — EADDRINUSE 방지)
+const FIXED_PORT = process.env.DSCODE_NEXT_PORT
+  ? parseInt(process.env.DSCODE_NEXT_PORT, 10)
+  : null
+let NEXT_PORT = FIXED_PORT || 3000 // bootstrap() 에서 동적 할당될 수 있음
 const NEXT_MODE = process.env.DSCODE_DEV_MODE === '1' ? 'dev' : 'start'
 const EXTERNAL_URL = process.env.DSCODE_URL
 const PROJECT_ROOT = path.join(__dirname, '..')
+
+/** OS 에 0 번 포트를 요청해 비어있는 TCP 포트 하나를 받아 닫고 그 번호를 반환. */
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer()
+    srv.unref()
+    srv.on('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address()
+      srv.close(() => resolve(port))
+    })
+  })
+}
 
 const DEFAULT_PROXY_URL =
   NEXT_MODE === 'dev'
@@ -32,10 +51,43 @@ const DEFAULT_PROXY_URL =
 const PROXY_BASE_URL = process.env.DSCODE_PROXY_BASE_URL || DEFAULT_PROXY_URL
 
 const TOKEN_FILE = path.join(app.getPath('userData'), 'api-token.bin')
+const LOG_FILE = path.join(app.getPath('userData'), 'main.log')
 
 let mainWindow = null
 let settingsWindow = null
 let nextProcess = null
+
+// ── 파일 로깅 (Windows GUI app 은 stdout 이 콘솔로 안 흘러나오므로 필수) ─────
+try {
+  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true })
+} catch {
+  /* userData 디렉토리 만들기 실패해도 다음 단계가 죽지는 않음 */
+}
+const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' })
+function logLine(prefix, args) {
+  const ts = new Date().toISOString()
+  const msg = args
+    .map((a) => (a instanceof Error ? a.stack || a.message : typeof a === 'string' ? a : JSON.stringify(a)))
+    .join(' ')
+  try {
+    logStream.write(`${ts} ${prefix} ${msg}\n`)
+  } catch {
+    /* ignore */
+  }
+}
+const _origLog = console.log.bind(console)
+const _origErr = console.error.bind(console)
+console.log = (...args) => {
+  logLine('[log]', args)
+  _origLog(...args)
+}
+console.error = (...args) => {
+  logLine('[err]', args)
+  _origErr(...args)
+}
+console.log(`=== DS Code main process boot @ ${app.getVersion?.() || '?'} platform=${process.platform} ===`)
+console.log(`logFile=${LOG_FILE}`)
+console.log(`projectRoot=${PROJECT_ROOT} nextPort=${NEXT_PORT} mode=${NEXT_MODE} proxy=${PROXY_BASE_URL}`)
 
 // ── 토큰 저장/로드 ────────────────────────────────────────────────────────────
 
@@ -97,17 +149,41 @@ function spawnNext(token) {
     'bin',
     'next',
   )
-  const proc = spawn(
-    process.execPath,
-    [nextEntry, NEXT_MODE, '-p', String(NEXT_PORT)],
-    {
-      cwd: PROJECT_ROOT,
-      env: { ...buildChildEnv(token), ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'inherit',
-    },
-  )
+  console.log(`[spawnNext] execPath=${process.execPath}`)
+  console.log(`[spawnNext] nextEntry=${nextEntry} exists=${fs.existsSync(nextEntry)}`)
+  if (!fs.existsSync(nextEntry)) {
+    console.error(`[spawnNext] FATAL: next entry not found — packaging 에 빠짐. PROJECT_ROOT 의 node_modules 확인 필요.`)
+    // node_modules 디렉토리 전체 ls 로 어떤 게 있는지 로그
+    try {
+      const root = fs.readdirSync(path.join(PROJECT_ROOT, 'node_modules')).slice(0, 30).join(', ')
+      console.error(`[spawnNext] node_modules sample: ${root}`)
+    } catch (e) {
+      console.error(`[spawnNext] node_modules read failed: ${e.message}`)
+    }
+    return null
+  }
+  let proc
+  try {
+    proc = spawn(
+      process.execPath,
+      [nextEntry, NEXT_MODE, '-p', String(NEXT_PORT)],
+      {
+        cwd: PROJECT_ROOT,
+        env: { ...buildChildEnv(token), ELECTRON_RUN_AS_NODE: '1' },
+        // stdio 를 파일로 redirect — Windows GUI app 은 'inherit' 가 무의미
+        stdio: ['ignore', logStream, logStream],
+      },
+    )
+  } catch (e) {
+    console.error(`[spawnNext] spawn threw:`, e)
+    return null
+  }
+  console.log(`[spawnNext] spawned pid=${proc.pid}`)
+  proc.on('error', (err) => {
+    console.error(`[spawnNext] error event:`, err)
+  })
   proc.on('exit', (code, signal) => {
-    console.log(`[dscode-electron] next exited code=${code} signal=${signal}`)
+    console.log(`[spawnNext] next exited code=${code} signal=${signal}`)
     nextProcess = null
     if (mainWindow && !app.isQuitting) app.quit()
   })
@@ -214,6 +290,16 @@ function loadErrorPage(url, message) {
 
 async function bootstrapWithToken(token) {
   if (!EXTERNAL_URL) {
+    // 포트가 고정되지 않았으면 빈 포트를 동적으로 확보 (3000 점유 충돌 방지).
+    if (!FIXED_PORT) {
+      try {
+        NEXT_PORT = await findFreePort()
+        console.log(`[dscode-electron] picked free port ${NEXT_PORT}`)
+      } catch (e) {
+        console.error('[dscode-electron] findFreePort failed, falling back to 3000:', e)
+        NEXT_PORT = 3000
+      }
+    }
     console.log(`[dscode-electron] Next.js (${NEXT_MODE}) on :${NEXT_PORT}, proxy=${PROXY_BASE_URL}`)
     nextProcess = spawnNext(token)
     const ready = await waitForNext(NEXT_MODE === 'dev' ? 60000 : 30000)
@@ -303,6 +389,13 @@ function buildMenu() {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        { type: 'separator' },
+        {
+          label: '로그 폴더 열기',
+          click: () => {
+            shell.showItemInFolder(LOG_FILE)
+          },
+        },
       ],
     },
     { role: 'windowMenu' },

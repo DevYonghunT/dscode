@@ -213,6 +213,55 @@ body {
   animation: pulse-soft 1.6s ease-in-out infinite;
 }
 
+/* ───────── Thinking indicator (AI 응답 준비 중) ─────────
+ * gold dot 3개가 staggered 로 통통 튀고, 라벨 텍스트엔 빛이 좌→우로 흐른다.
+ * 차분한 luxury 톤 — 보라색 그라데이션 없이 gold accent 만.
+ */
+@keyframes thinking-bounce {
+  0%, 70%, 100% { transform: translateY(0) scale(0.7); opacity: 0.35; }
+  35% { transform: translateY(-4px) scale(1); opacity: 1; }
+}
+.thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--gold);
+  animation: thinking-bounce 1.3s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.18s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes thinking-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.thinking-text {
+  background: linear-gradient(
+    90deg,
+    var(--fg-subtle) 0%,
+    var(--fg-subtle) 35%,
+    var(--fg) 50%,
+    var(--fg-subtle) 65%,
+    var(--fg-subtle) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: thinking-shimmer 2.4s linear infinite;
+}
+/* prefers-reduced-motion 존중 — 애니메이션 끄고 정적 표시 */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dot { animation: none; opacity: 0.6; }
+  .thinking-text {
+    animation: none;
+    -webkit-text-fill-color: var(--fg-subtle);
+    color: var(--fg-subtle);
+  }
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

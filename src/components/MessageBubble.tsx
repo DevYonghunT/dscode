@@ -126,9 +126,7 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
                 />
               ))}
             {!isUser && turn.isStreaming && !turn.text && turn.toolCalls.length === 0 && (
-              <div className="flex items-center gap-2 text-sm text-fg-subtle animate-pulse-soft">
-                <span>생각 중…</span>
-              </div>
+              <ThinkingIndicator />
             )}
           </div>
         ) : null}
@@ -146,6 +144,24 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
       )}
     </div>
   );
+}
+
+function ThinkingIndicator() {
+  return (
+    <div
+      className="flex items-center gap-2.5 text-sm"
+      role="status"
+      aria-live="polite"
+      aria-label="AI가 응답을 준비하고 있어요"
+    >
+      <span className="flex items-center gap-1" aria-hidden="true">
+        <span className="thinking-dot" />
+        <span className="thinking-dot" />
+        <span className="thinking-dot" />
+      </span>
+      <span className="thinking-text font-medium">생각하고 있어요</span>
+    </div>
+  )
 }
 
 function CopyButton({ text, isUser }: { text: string; isUser: boolean }) {
