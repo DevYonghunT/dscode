@@ -7,6 +7,7 @@ import { FileViewer } from "@/components/FileViewer";
 import { Chat } from "@/components/Chat";
 import { SettingsModal } from "@/components/SettingsModal";
 import { LoginScreen } from "@/components/LoginScreen";
+import { ApprovalScreen, type ApprovalState } from "@/components/ApprovalScreen";
 import { SearchPalette } from "@/components/SearchPalette";
 import { ResizableLayout } from "@/components/ResizableLayout";
 import { useChat } from "@/hooks/useChat";
@@ -24,6 +25,20 @@ type MeUser = {
   image?: string | null;
 };
 
+// Electron preload (electron/preload.cjs) 가 노출하는 브릿지. 웹(브라우저)에서는
+// 없으므로 optional. persistToken 은 발급된 dsk_ 토큰을 OS 보안저장소에 저장한다.
+declare global {
+  interface Window {
+    dscode?: {
+      persistToken?: (token: string) => Promise<boolean>;
+      saveToken?: (token: string) => Promise<unknown>;
+    };
+  }
+}
+
+/** issue-token 응답에서 active 면 채팅 가능, 그 외는 상태 화면. */
+type ApprovalUi = "active" | ApprovalState;
+
 const DEFAULT_PROJECT_ID = "default";
 const ACTIVE_PROJECT_LS_KEY = "dscode_active_project";
 const MODEL_LS_KEY = "dscode_model";
@@ -31,6 +46,8 @@ const MODEL_LS_KEY = "dscode_model";
 export default function Home() {
   const [bootstrapped, setBootstrapped] = useState(false);
   const [user, setUser] = useState<MeUser | null>(null);
+  // 로그인 후 승인/토큰 발급 상태. null = 아직 미확인(로딩 직후).
+  const [approval, setApproval] = useState<ApprovalUi | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>(DEFAULT_PROJECT_ID);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -72,6 +89,54 @@ export default function Home() {
   useEffect(() => {
     loadMe();
   }, [loadMe]);
+
+  // ── 승인 확인 + 토큰 자동 발급 ──────────────────────────────────────────────
+  // 로그인(세션) 성공 후, 앱(서버) 가 세션의 Google id_token 으로 agentclass 에
+  // 승인 확인 + dsk_ 토큰 발급을 요청한다. 학생은 토큰을 직접 입력하지 않는다.
+  //   active       → 토큰을 OS 보안저장소에 저장(다음 실행 대비). 현재 세션 채팅은
+  //                  issue-token 라우트가 Next 프로세스 env 를 이미 갱신해 즉시 가능.
+  //   pending/blocked/api_disabled → 상태 화면 표시(채팅 비활성)
+  //   no_session/network 등 → error 상태(재시도 버튼)
+  const issueToken = useCallback(async () => {
+    setApproval("checking");
+    try {
+      const r = await fetch(apiUrl("/api/issue-token"), { method: "POST" });
+      const j = (await r.json().catch(() => ({}))) as {
+        status?: string;
+        token?: string | null;
+      };
+      const status = j?.status;
+      if (status === "active" && typeof j.token === "string" && j.token) {
+        // OS 보안저장소에 저장(데스크톱 앱일 때만). 실패해도 현재 세션은 동작하므로 무시.
+        try {
+          await window.dscode?.persistToken?.(j.token);
+        } catch {
+          /* 저장 실패: 다음 실행 때 다시 발급됨 */
+        }
+        setApproval("active");
+      } else if (
+        status === "pending" ||
+        status === "blocked" ||
+        status === "api_disabled"
+      ) {
+        setApproval(status);
+      } else {
+        // no_session / network_error / error / 알 수 없음 → 재시도 가능한 오류
+        setApproval("error");
+      }
+    } catch {
+      setApproval("error");
+    }
+  }, []);
+
+  // user 가 확정되면 토큰 발급을 시도. user 가 없어지면(로그아웃) 상태 초기화.
+  useEffect(() => {
+    if (user) {
+      issueToken();
+    } else {
+      setApproval(null);
+    }
+  }, [user, issueToken]);
 
   const loadProjects = useCallback(async () => {
     if (!user) return;
@@ -213,6 +278,22 @@ export default function Home() {
   }
 
   if (!user) return <LoginScreen />;
+
+  // 로그인은 됐지만 아직 승인/발급 전이면 상태 화면. active 일 때만 채팅 UI 노출.
+  if (approval !== "active") {
+    return (
+      <ApprovalScreen
+        state={approval ?? "checking"}
+        onRetry={
+          approval === "error" ||
+          approval === "pending" ||
+          approval === "api_disabled"
+            ? issueToken
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-bg">

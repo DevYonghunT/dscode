@@ -321,8 +321,12 @@ function createMainWindow() {
     title: 'DS Code',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f0f11' : '#f8fafc',
     webPreferences: {
+      // 로그인 후 자동 발급받은 토큰을 렌더러가 window.dscode.persistToken 으로
+      // 저장할 수 있도록 preload 노출. preload 가 ipcRenderer 를 쓰므로 sandbox 는
+      // 꺼야 한다(settings 창과 동일한 이유). contextIsolation 은 유지해 안전.
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       nodeIntegration: false,
     },
   })
@@ -407,6 +411,26 @@ ipcMain.handle('dscode:save-token', async (_e, rawToken) => {
     settingsWindow = null
   }
   await bootstrapWithToken(rawToken)
+})
+
+// 이미 떠 있는 메인 윈도우(렌더러)가 로그인 후 자동 발급받은 dsk_ 토큰을 영구
+// 저장(safeStorage)만 하기 위한 핸들러. save-token 과 달리 Next spawn / 윈도우 생성
+// 같은 부트스트랩을 하지 않는다(이미 다 떠 있음). 현재 세션 채팅에는 issue-token
+// 라우트가 Next 프로세스의 process.env.ANTHROPIC_API_KEY 를 이미 갱신해 적용되고,
+// 이 저장은 "다음 앱 실행 때" main.cjs 가 토큰을 주입하도록 보존하는 용도다.
+ipcMain.handle('dscode:persist-token', (_e, rawToken) => {
+  if (typeof rawToken !== 'string' || !rawToken.startsWith('dsk_') || rawToken.length < 16) {
+    throw new Error('토큰 형식이 올바르지 않습니다 (dsk_ 로 시작해야 함)')
+  }
+  try {
+    saveToken(rawToken)
+    return true
+  } catch (e) {
+    console.error('[dscode-electron] persist-token failed:', e.message)
+    // 보안 저장소가 없어도 현재 세션 채팅은 issue-token 의 env 주입으로 동작하므로,
+    // 저장 실패를 치명적으로 던지지 않고 false 만 돌려준다(다음 실행 때 재발급됨).
+    return false
+  }
 })
 
 ipcMain.on('dscode:cancel-settings', () => {
