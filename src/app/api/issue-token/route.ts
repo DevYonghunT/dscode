@@ -35,7 +35,7 @@ function agentclassOrigin(): string {
  * active 일 때: 이 라우트는 Next.js 자식 프로세스 안에서 실행되므로, 발급된 토큰을
  * 이 프로세스의 process.env.ANTHROPIC_API_KEY 에 즉시 반영한다 → 재시작 없이 다음
  * 채팅 요청(/api/chat 이 process.env.ANTHROPIC_API_KEY 를 매 요청 읽음)부터 적용.
- * 영구 저장(safeStorage)은 렌더러가 반환된 token 으로 window.dscode.saveToken 을
+ * 영구 저장(safeStorage)은 렌더러가 반환된 token 으로 window.dscode.persistToken 을
  * 호출해 처리한다(다음 앱 실행 때 main.cjs 가 주입).
  */
 export async function POST() {

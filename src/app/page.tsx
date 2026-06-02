@@ -31,7 +31,6 @@ declare global {
   interface Window {
     dscode?: {
       persistToken?: (token: string) => Promise<boolean>;
-      saveToken?: (token: string) => Promise<unknown>;
     };
   }
 }

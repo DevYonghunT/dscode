@@ -1,11 +1,13 @@
 // DS Code Electron main process.
 //
 // 동작:
-//   1. 저장된 학생 API 토큰 (safeStorage 암호화) 로드 시도
-//   2. 없으면 settings 윈도우 띄워 입력받고 OS keychain 에 저장
-//   3. Next.js 를 자식 프로세스로 spawn (ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL 주입)
-//   4. 포트 살아나면 main BrowserWindow 띄움
-//   5. 종료 시 자식 Next 같이 kill
+//   1. 저장된 학생 API 토큰 (safeStorage 암호화) 로드 시도 (없으면 null)
+//   2. 토큰 유무와 무관하게 Next.js 를 자식 프로세스로 spawn
+//      - 토큰 있으면 ANTHROPIC_API_KEY 주입 (+ ANTHROPIC_BASE_URL)
+//      - 토큰 없으면 키 미주입 → 메인 창에서 Google 로그인 후 page.tsx 가 자동 발급
+//        (/api/issue-token)하고 persist-token 으로 저장 → 다음 실행 때 주입됨
+//   3. 포트 살아나면 main BrowserWindow 띄움
+//   4. 종료 시 자식 Next 같이 kill
 //
 // 환경변수:
 //   DSCODE_DEV_MODE=1           — `next dev` (HMR). 기본은 `next start` (build 필요)
@@ -92,7 +94,6 @@ const TOKEN_FILE = path.join(app.getPath('userData'), 'api-token.bin')
 const LOG_FILE = path.join(app.getPath('userData'), 'main.log')
 
 let mainWindow = null
-let settingsWindow = null
 let nextProcess = null
 
 // ── 파일 로깅 (Windows GUI app 은 stdout 이 콘솔로 안 흘러나오므로 필수) ─────
@@ -171,7 +172,9 @@ function buildChildEnv(token) {
   if (token) {
     env.ANTHROPIC_API_KEY = token
   } else {
-    // 토큰이 없으면(미설정) 외부 키도 못 쓰게 제거 — settings 창에서 입력받아야 함
+    // 토큰이 없으면(미설정/최초 실행) 외부 키도 못 쓰게 제거. 키 없는 상태로 떠도
+    // 메인 창에서 Google 로그인 → page.tsx 가 /api/issue-token 으로 자동 발급해
+    // 채운다(그리고 persist-token 으로 저장 → 다음 실행 때 여기로 주입됨).
     delete env.ANTHROPIC_API_KEY
   }
   if (PROXY_BASE_URL) {
@@ -286,32 +289,6 @@ async function waitForNext(timeoutMs = 30000) {
 
 // ── 윈도우 ──────────────────────────────────────────────────────────────────
 
-function createSettingsWindow() {
-  settingsWindow = new BrowserWindow({
-    width: 520,
-    height: 460,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    title: 'DS Code 설정',
-    backgroundColor: '#f8fafc',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      sandbox: false, // safeStorage IPC 응답 받으려면 preload 가 ipcRenderer 써야 함
-      nodeIntegration: false,
-    },
-  })
-  settingsWindow.loadFile(path.join(__dirname, 'settings.html'))
-  settingsWindow.on('closed', () => {
-    settingsWindow = null
-    // 사용자가 토큰 저장 없이 창 닫으면 앱 종료
-    if (!loadToken() && !app.isQuitting) {
-      app.quit()
-    }
-  })
-}
-
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -391,33 +368,19 @@ async function bootstrapWithToken(token) {
 }
 
 function bootstrap() {
-  const token = loadToken()
-  if (token) {
-    bootstrapWithToken(token)
-  } else {
-    createSettingsWindow()
-  }
+  // 토큰 유무와 무관하게 메인 창 + Next 를 띄운다. 토큰이 없으면(null) buildChildEnv 가
+  // ANTHROPIC_API_KEY 를 주입하지 않고, 메인 창의 Google 로그인 후 page.tsx 가
+  // /api/issue-token 으로 자동 발급해 채운다(수동 입력 불필요).
+  bootstrapWithToken(loadToken())
 }
 
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
-ipcMain.handle('dscode:save-token', async (_e, rawToken) => {
-  if (typeof rawToken !== 'string' || !rawToken.startsWith('dsk_') || rawToken.length < 16) {
-    throw new Error('토큰 형식이 올바르지 않습니다 (dsk_ 로 시작해야 함)')
-  }
-  saveToken(rawToken)
-  if (settingsWindow) {
-    settingsWindow.close()
-    settingsWindow = null
-  }
-  await bootstrapWithToken(rawToken)
-})
-
 // 이미 떠 있는 메인 윈도우(렌더러)가 로그인 후 자동 발급받은 dsk_ 토큰을 영구
-// 저장(safeStorage)만 하기 위한 핸들러. save-token 과 달리 Next spawn / 윈도우 생성
-// 같은 부트스트랩을 하지 않는다(이미 다 떠 있음). 현재 세션 채팅에는 issue-token
-// 라우트가 Next 프로세스의 process.env.ANTHROPIC_API_KEY 를 이미 갱신해 적용되고,
-// 이 저장은 "다음 앱 실행 때" main.cjs 가 토큰을 주입하도록 보존하는 용도다.
+// 저장(safeStorage)만 하기 위한 핸들러. Next spawn / 윈도우 생성 같은 부트스트랩은
+// 하지 않는다(이미 다 떠 있음). 현재 세션 채팅에는 issue-token 라우트가 Next
+// 프로세스의 process.env.ANTHROPIC_API_KEY 를 이미 갱신해 적용되고, 이 저장은
+// "다음 앱 실행 때" main.cjs(bootstrap → loadToken)가 토큰을 주입하도록 보존하는 용도다.
 ipcMain.handle('dscode:persist-token', (_e, rawToken) => {
   if (typeof rawToken !== 'string' || !rawToken.startsWith('dsk_') || rawToken.length < 16) {
     throw new Error('토큰 형식이 올바르지 않습니다 (dsk_ 로 시작해야 함)')
@@ -433,10 +396,6 @@ ipcMain.handle('dscode:persist-token', (_e, rawToken) => {
   }
 })
 
-ipcMain.on('dscode:cancel-settings', () => {
-  if (settingsWindow) settingsWindow.close()
-})
-
 // ── 메뉴 ────────────────────────────────────────────────────────────────────
 
 function buildMenu() {
@@ -449,14 +408,14 @@ function buildMenu() {
         {
           label: 'API 토큰 재설정…',
           click: async () => {
-            const r = await dialog.showMessageBox(mainWindow || settingsWindow || null, {
+            const r = await dialog.showMessageBox(mainWindow || null, {
               type: 'warning',
               buttons: ['취소', '재설정'],
               defaultId: 0,
               cancelId: 0,
               title: 'API 토큰 재설정',
               message: '저장된 API 토큰을 삭제하고 앱을 재시작합니다.',
-              detail: '다음 실행 시 새 토큰을 입력해야 합니다.',
+              detail: '다음 실행 시 로그인하면 토큰이 자동으로 다시 발급됩니다.',
             })
             if (r.response === 1) {
               clearToken()
@@ -535,5 +494,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (!mainWindow && !settingsWindow) bootstrap()
+  if (!mainWindow) bootstrap()
 })
