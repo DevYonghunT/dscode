@@ -39,15 +39,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (verified !== true) return false;
       return emailAllowed(profile?.email);
     },
-    async jwt({ token, profile }) {
+    async jwt({ token, profile, account }) {
       if (profile?.email) token.email = profile.email;
       const picture = (profile as { picture?: string } | undefined)?.picture;
       if (picture) token.picture = picture;
+      // Google id_token 저장 — agentclass issue-token 검증용 (로그인 시점에만 account 존재)
+      if (account?.id_token) token.googleIdToken = account.id_token;
       return token;
     },
     async session({ session, token }) {
       if (token.email) session.user = { ...session.user, email: token.email as string };
       if (token.picture && session.user) session.user.image = token.picture as string;
+      (session as { googleIdToken?: string }).googleIdToken = token.googleIdToken as string | undefined;
       return session;
     },
     async redirect({ url, baseUrl }) {
