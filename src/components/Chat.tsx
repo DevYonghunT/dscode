@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,9 +10,9 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { Send, Square, Paperclip, ImagePlus } from "lucide-react";
+import { Send, Square, Paperclip, ImagePlus, ArrowDown } from "lucide-react";
 import type { ChatTurn } from "@/lib/client/types";
-import type { ModelId } from "@/lib/client/models";
+import type { EffortId, ModelId } from "@/lib/client/models";
 import { MessageBubble } from "./MessageBubble";
 import { Emblem } from "./Emblem";
 import { AttachmentChip } from "./AttachmentChip";
@@ -28,6 +29,8 @@ type Props = {
   onFilePathClick?: (path: string) => void;
   model: ModelId;
   onChangeModel: (next: ModelId) => void;
+  effort: EffortId;
+  onChangeEffort: (next: EffortId) => void;
 };
 
 const SUGGESTIONS = [
@@ -50,6 +53,8 @@ export function Chat({
   onFilePathClick,
   model,
   onChangeModel,
+  effort,
+  onChangeEffort,
 }: Props) {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<File[]>([]);
@@ -57,12 +62,47 @@ export function Chat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 바닥 근처 여부. 바닥 근처일 때만 새 토큰을 자동 추종하고, 사용자가 위로
+  // 스크롤하면 추종을 멈춰 답변 도중에도 위로 올려 읽을 수 있게 한다.
+  const [atBottom, setAtBottom] = useState(true);
+  // 자동 추종 판정 임계값(px). 바닥에서 이 이내면 "바닥 근처"로 본다.
+  const BOTTOM_THRESHOLD = 80;
 
+  const isNearBottom = useCallback((el: HTMLDivElement) => {
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD;
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setAtBottom(true);
+  }, []);
+
+  // 스크롤 위치 추적. 사용자가 위로 벗어나면 atBottom=false → 자동 추종 중단.
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtBottom(isNearBottom(el));
+  }, [isNearBottom]);
+
+  // turns 변경 시: 바닥 근처일 때만 추종(sticky-bottom). 위로 벗어났으면 그대로 둔다.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (atBottom) {
+      el.scrollTop = el.scrollHeight;
     }
-  }, [turns]);
+  }, [turns, atBottom]);
+
+  // MessageBubble 의 memo 를 깨지 않도록 onFilePathClick 을 참조 안정화.
+  // (부모가 매 렌더 새 함수를 넘겨도 여기서 안정적인 래퍼로 감싼다.)
+  const handleFilePathClick = useCallback(
+    (path: string) => {
+      onFilePathClick?.(path);
+    },
+    [onFilePathClick],
+  );
 
   function submit(e?: FormEvent) {
     e?.preventDefault();
@@ -75,6 +115,8 @@ export function Chat({
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
+    // 사용자가 직접 보냈으면 위로 올라가 있었더라도 바닥으로 스냅해 추종 재개.
+    setAtBottom(true);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -133,7 +175,7 @@ export function Chat({
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8">
           {turns.length === 0 ? (
             <EmptyState onPick={(s) => setInput(s)} />
@@ -142,12 +184,25 @@ export function Chat({
               <MessageBubble
                 key={t.id}
                 turn={t}
-                onFilePathClick={onFilePathClick}
+                onFilePathClick={handleFilePathClick}
               />
             ))
           )}
         </div>
       </div>
+
+      {/* 사용자가 위로 벗어났고 메시지가 있을 때만 노출되는 "바닥으로" 점프 버튼. */}
+      {!atBottom && turns.length > 0 && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-28 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-3.5 py-2 text-xs font-medium text-fg shadow-md transition-colors hover:bg-bg-sunken"
+          aria-label="최신 메시지로 이동"
+        >
+          <ArrowDown className="h-3.5 w-3.5" />
+          새 메시지
+        </button>
+      )}
 
       <div className="border-t border-border bg-bg-elevated">
         <form onSubmit={submit} className="mx-auto w-full max-w-3xl px-6 py-4">
@@ -236,7 +291,13 @@ export function Chat({
             )}
           </div>
           <div className="mt-2 flex items-center justify-between gap-3 px-1">
-            <ModelPicker value={model} onChange={onChangeModel} disabled={busy} />
+            <ModelPicker
+              value={model}
+              onChange={onChangeModel}
+              effort={effort}
+              onChangeEffort={onChangeEffort}
+              disabled={busy}
+            />
             <p className="text-center text-[11px] text-fg-subtle">
               Duksoo Code(DS Code)는 워크스페이스의 파일을 읽고/쓰고 셸·웹 검색·배포까지 수행할 수 있습니다.
             </p>

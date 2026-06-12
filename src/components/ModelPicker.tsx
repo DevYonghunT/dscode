@@ -2,15 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Check, Sparkles } from "lucide-react";
-import { MODELS, type ModelId } from "@/lib/client/models";
+import {
+  MODELS,
+  EFFORTS,
+  DEFAULT_EFFORT,
+  type ModelId,
+  type EffortId,
+} from "@/lib/client/models";
 
 type Props = {
   value: ModelId;
   onChange: (next: ModelId) => void;
+  effort: EffortId;
+  onChangeEffort: (next: EffortId) => void;
   disabled?: boolean;
 };
 
-export function ModelPicker({ value, onChange, disabled }: Props) {
+export function ModelPicker({
+  value,
+  onChange,
+  effort,
+  onChangeEffort,
+  disabled,
+}: Props) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +47,10 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
   }, [open]);
 
   const active = MODELS.find((m) => m.id === value) || MODELS[0];
+  const activeEffort =
+    EFFORTS.find((e) => e.id === effort) ||
+    EFFORTS.find((e) => e.id === DEFAULT_EFFORT) ||
+    EFFORTS[0];
 
   return (
     <div ref={wrapRef} className="relative inline-block">
@@ -41,10 +59,13 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-        title={`모델: ${active.label}`}
+        title={`모델: ${active.label} · 추론 깊이: ${activeEffort.label}`}
       >
         <Sparkles className="h-2.5 w-2.5 text-gold" />
-        <span>{active.shortLabel}</span>
+        <span>
+          {active.shortLabel}
+          {effort !== DEFAULT_EFFORT && ` · ${activeEffort.label}`}
+        </span>
         <ChevronDown
           className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-180" : ""}`}
         />
@@ -80,6 +101,42 @@ export function ModelPicker({ value, onChange, disabled }: Props) {
                       </span>
                       <span className="mt-0.5 block text-[11px] leading-snug text-fg-muted">
                         {m.description}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="border-t border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+            추론 깊이
+          </div>
+          <ul className="py-1">
+            {EFFORTS.map((e) => {
+              const selected = e.id === effort;
+              return (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChangeEffort(e.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
+                      selected ? "bg-navy/5" : "hover:bg-bg-sunken"
+                    }`}
+                  >
+                    <Check
+                      className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                        selected ? "text-gold" : "text-transparent"
+                      }`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium text-fg">
+                        {e.label}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] leading-snug text-fg-muted">
+                        {e.description}
                       </span>
                     </span>
                   </button>

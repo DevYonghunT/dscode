@@ -98,7 +98,7 @@ export default function SharePage({
         <h1 className="mt-4 font-display text-xl font-semibold text-fg">
           Duksoo Code
         </h1>
-        <div className="mt-4 max-w-sm rounded-xl border border-danger/30 bg-red-50 px-4 py-3 text-center text-sm text-danger">
+        <div className="mt-4 max-w-sm rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-center text-sm text-danger">
           {error}
         </div>
       </div>
@@ -165,7 +165,7 @@ export default function SharePage({
           ) : fileLoading && !file ? (
             <div className="px-4 py-3 text-xs text-fg-subtle">불러오는 중…</div>
           ) : fileError ? (
-            <div className="m-4 rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+            <div className="m-4 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
               {fileError}
             </div>
           ) : file ? (

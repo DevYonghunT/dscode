@@ -55,8 +55,10 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
           setData(null);
           return;
         }
-        if (dirtyRef.current && data && j.mtimeMs > data.mtimeMs + 1) {
-          setExternalChange(true);
+        // 편집 중(dirty)이면 mtime 변화 여부와 무관하게 편집 내용을 보존한다.
+        // (mtime이 같아도 setData/setEditing으로 덮으면 미저장 입력이 사라짐)
+        if (dirtyRef.current) {
+          if (data && j.mtimeMs > data.mtimeMs + 1) setExternalChange(true);
           return;
         }
         setData(j);
@@ -79,6 +81,8 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
 
   async function save() {
     if (!data || !path || !dirty || saving) return;
+    // 일부만 로드된(truncated) 파일은 저장 금지 — 잘린 내용으로 원본을 덮어쓰면 안 됨.
+    if (data.truncated) return;
     setSaving(true);
     setError(null);
     try {
@@ -90,6 +94,7 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
           projectId,
           content: editing,
           mtimeMs: data.mtimeMs,
+          truncated: data.truncated,
         }),
       });
       const j = await res.json();
@@ -133,6 +138,8 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         if (!path || !dirty) return;
         e.preventDefault();
+        // truncated 파일은 저장 차단 (일부만 로드된 상태라 원본 손상 위험)
+        if (data?.truncated) return;
         save();
       }
     }
@@ -169,13 +176,17 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
         <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={save}
-            disabled={!dirty || saving}
+            disabled={!dirty || saving || !!data?.truncated}
             className={`flex h-7 items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
-              dirty
+              dirty && !data?.truncated
                 ? "bg-navy text-white hover:bg-navy-soft disabled:opacity-50"
                 : "text-fg-subtle"
             }`}
-            title="저장 (Cmd/Ctrl+S)"
+            title={
+              data?.truncated
+                ? "파일이 너무 커서 저장할 수 없습니다"
+                : "저장 (Cmd/Ctrl+S)"
+            }
           >
             {savedFlash ? (
               <>
@@ -204,7 +215,7 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
             <p>외부에서 파일이 변경되었습니다 (에이전트 작업으로 추정).</p>
             <button
               onClick={discardAndReload}
-              className="mt-1 inline-flex items-center gap-1 rounded bg-gold-deep px-2 py-0.5 text-white hover:bg-amber-700"
+              className="mt-1 inline-flex items-center gap-1 rounded bg-gold-deep px-2 py-0.5 text-white hover:bg-gold-strong"
             >
               <RotateCw className="h-3 w-3" /> 변경 사항 버리고 새로고침
             </button>
@@ -216,7 +227,7 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
         {loading && !data ? (
           <div className="px-4 py-3 text-xs text-fg-subtle">불러오는 중…</div>
         ) : error ? (
-          <div className="m-4 rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+          <div className="m-4 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
             {error}
           </div>
         ) : data ? (
@@ -229,8 +240,11 @@ export function FileViewer({ path, projectId, reloadNonce, onClose }: Props) {
       </div>
 
       {data?.truncated && (
-        <div className="border-t border-border bg-gold-soft/40 px-4 py-2 text-xs text-gold-deep">
-          파일이 큽니다. 처음 512KB만 표시 중 — 저장 시 보이는 부분만 저장됩니다.
+        <div className="flex items-start gap-2 border-t border-gold/40 bg-gold-soft/40 px-4 py-2 text-xs text-gold-deep">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            파일이 너무 커서 처음 512KB만 표시됩니다. 안전을 위해 저장할 수 없어요.
+          </p>
         </div>
       )}
     </aside>

@@ -92,7 +92,7 @@ export function LoginScreen() {
           </button>
 
           {error && (
-            <div className="mt-3 whitespace-pre-line rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs leading-relaxed text-danger">
+            <div className="mt-3 whitespace-pre-line rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs leading-relaxed text-danger">
               {error}
             </div>
           )}

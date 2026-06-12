@@ -63,16 +63,20 @@ export async function GET(req: NextRequest) {
 
 /**
  * Save a file from the in-browser editor.
- * Body: { path, content, mtimeMs?, projectId? }
+ * Body: { path, content, mtimeMs?, truncated?, projectId? }
  *  - If `mtimeMs` is given, we 409 when the on-disk mtime is newer (i.e. the
  *    file was modified externally — usually by the agent — while the user was
  *    editing). The client should reload and retry.
+ *  - If `truncated` is true, the client only loaded the first 512KB of a large
+ *    file (see GET). Saving it would overwrite the whole file with the truncated
+ *    content and permanently destroy the rest — so we refuse the write.
  */
 export async function PUT(req: NextRequest) {
   let body: {
     path?: string;
     content?: string;
     mtimeMs?: number;
+    truncated?: boolean;
     projectId?: string | null;
   };
   try {
@@ -87,6 +91,17 @@ export async function PUT(req: NextRequest) {
   }
   if (typeof body.content !== "string") {
     return json({ error: "content가 필요합니다." }, 400);
+  }
+  // 일부만 로드된(truncated) 파일은 저장 거부 — 잘린 내용으로 원본 전체를 덮어쓰는 것을 막는다.
+  if (body.truncated === true) {
+    return json(
+      {
+        error:
+          "파일이 너무 커서 일부만 표시됩니다. 안전을 위해 저장할 수 없어요.",
+        code: "truncated",
+      },
+      409,
+    );
   }
   const contentBytes = Buffer.byteLength(body.content, "utf8");
   if (contentBytes > MAX_WRITE_BYTES) {

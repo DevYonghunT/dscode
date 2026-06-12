@@ -75,16 +75,43 @@ function decrypt(serialized: string): string {
 }
 
 export async function loadSecrets(email: string): Promise<UserSecrets> {
+  const p = secretsPath(email);
+  let buf: string;
   try {
-    const buf = await fs.readFile(secretsPath(email), "utf8");
+    buf = await fs.readFile(p, "utf8");
+  } catch (e) {
+    // 파일이 없으면(최초 실행) 빈 secrets 로 정상 처리.
+    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return {};
+    throw e;
+  }
+  try {
     const plaintext = decrypt(buf);
     const parsed = JSON.parse(plaintext) as UserSecrets;
     return parsed;
   } catch (e) {
-    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return {};
-    // Decrypt/parse failure → treat as empty (logged for ops).
-    console.error("[secrets] decrypt failed:", e);
+    // 복호화/파싱 실패. AUTH_SECRET 이 기기별로 바뀌면서 구버전 정적 키로
+    // 암호화된 기존 secrets 는 복호화에 실패할 수 있다(정상 시나리오).
+    // 이 경우 {} 반환은 유지하되, 그대로 두면 saveSecret 이 덮어써 원본이
+    // 조용히 사라지므로 손상 blob 을 .corrupt 백업으로 보존한다.
+    await backupCorruptSecrets(p);
+    console.error(
+      "[secrets] decrypt/parse failed — 손상 blob을 .corrupt로 백업하고 빈 값으로 진행:",
+      e,
+    );
     return {};
+  }
+}
+
+/**
+ * 손상된 secrets 파일을 <파일>.corrupt-<timestamp> 로 백업(rename)한다.
+ * 매 로드마다 호출될 수 있으므로 백업이 이미 있거나 실패해도
+ * 크래시/무한 루프 없이 조용히 넘어간다.
+ */
+async function backupCorruptSecrets(p: string): Promise<void> {
+  try {
+    await fs.rename(p, `${p}.corrupt-${Date.now()}`);
+  } catch (e) {
+    console.error("[secrets] corrupt 백업 실패(무시하고 진행):", e);
   }
 }
 
@@ -110,10 +137,14 @@ export async function deleteSecret(
 async function writeSecrets(email: string, secrets: UserSecrets): Promise<void> {
   const p = secretsPath(email);
   await fs.mkdir(path.dirname(p), { recursive: true });
-  await fs.writeFile(p, encrypt(JSON.stringify(secrets)), {
+  // 원자적 쓰기: 같은 디렉터리에 <파일>.tmp 로 먼저 쓴 뒤 rename. rename 은
+  // 동일 파일시스템에서 원자적이라 쓰기 도중 크래시해도 기존 파일이 깨지지 않는다.
+  const tmp = `${p}.tmp`;
+  await fs.writeFile(tmp, encrypt(JSON.stringify(secrets)), {
     mode: 0o600,
     encoding: "utf8",
   });
+  await fs.rename(tmp, p);
 }
 
 /** Build a masked preview like "ghp_***wxyz" for the settings UI. */

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { runAgent } from "@/lib/agent";
 import { requireUserAndProject } from "@/lib/session";
 import type { Attachment } from "@/lib/client/types";
+import { effortForModel, isEffortId, isModelId } from "@/lib/client/models";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     newSession?: boolean;
     resumeSessionId?: string;
     model?: string;
+    effort?: string;
   };
   try {
     body = await req.json();
@@ -47,6 +49,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 추론 깊이: UI 3단계(fast/balanced/deep)를 모델별 Anthropic effort 레벨로
+  // 변환한다. 알 수 없는 값이거나 목록 밖 모델(DSCODE_MODEL 강제 등)이면
+  // 보내지 않음 → API 기본값(high)으로 동작.
+  const model = body.model || process.env.DSCODE_MODEL;
+  const effort =
+    isEffortId(body.effort) && isModelId(model)
+      ? effortForModel(body.effort, model)
+      : undefined;
+
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   req.signal.addEventListener("abort", () => abortController.abort());
@@ -65,7 +76,8 @@ export async function POST(req: NextRequest) {
             typeof body.resumeSessionId === "string" && body.resumeSessionId
               ? body.resumeSessionId
               : undefined,
-          model: body.model || process.env.DSCODE_MODEL,
+          model,
+          effort,
           signal: abortController.signal,
         })) {
           controller.enqueue(encoder.encode(sseFormat(event)));

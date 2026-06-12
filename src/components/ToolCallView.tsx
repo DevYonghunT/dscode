@@ -148,7 +148,7 @@ export function ToolCallCard({ call, onFilePathClick }: CardProps) {
         <div
           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
             call.isError
-              ? "bg-red-50 text-danger"
+              ? "bg-danger-soft text-danger"
               : running
                 ? "bg-bg-sunken text-fg-muted"
                 : "bg-gold-soft text-gold-deep"

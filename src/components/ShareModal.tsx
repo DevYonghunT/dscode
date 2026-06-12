@@ -143,7 +143,7 @@ export function ShareModal({ projectId, projectName, onClose }: Props) {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+            <div className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
               {error}
             </div>
           )}
@@ -186,7 +186,7 @@ export function ShareModal({ projectId, projectName, onClose }: Props) {
                       <button
                         onClick={() => revoke(s.token)}
                         disabled={busy}
-                        className="flex h-7 w-7 items-center justify-center rounded border border-border text-fg-muted transition-colors hover:border-danger/30 hover:bg-red-50 hover:text-danger disabled:opacity-50"
+                        className="flex h-7 w-7 items-center justify-center rounded border border-border text-fg-muted transition-colors hover:border-danger/30 hover:bg-danger-soft hover:text-danger disabled:opacity-50"
                         title="공유 해제"
                         aria-label="공유 해제"
                       >

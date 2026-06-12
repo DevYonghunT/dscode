@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   query,
+  type EffortLevel,
   type Options,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -30,6 +31,8 @@ export type RunAgentOptions = {
   /** Resume a specific past session UUID instead of the cwd's "last". */
   resumeSessionId?: string;
   model?: string;
+  /** Anthropic effort 레벨 (추론 깊이). 미지정이면 API 기본값(high). */
+  effort?: EffortLevel;
   signal?: AbortSignal;
 };
 
@@ -156,6 +159,7 @@ export async function* runAgent(
     newSession,
     resumeSessionId,
     model,
+    effort,
     signal,
   } = opts;
 
@@ -246,6 +250,8 @@ export async function* runAgent(
     },
   };
   if (model) options.model = model;
+  // 추론 깊이. SDK 가 모델 미지원 레벨을 자동 다운그레이드하므로 그대로 전달.
+  if (effort) options.effort = effort;
 
   // Build either a plain string prompt (fast path) or an AsyncIterable carrying
   // a single multimodal user message when there are image attachments.

@@ -198,7 +198,7 @@ function ProjectRow({
           <button
             onClick={del}
             disabled={busy}
-            className="rounded bg-danger px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded bg-danger px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-danger-strong disabled:opacity-50"
           >
             {busy ? "…" : "삭제"}
           </button>
@@ -235,7 +235,7 @@ function ProjectRow({
           {!isDefault && (
             <button
               onClick={() => setConfirming(true)}
-              className="flex h-6 w-6 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-red-50 hover:text-danger"
+              className="flex h-6 w-6 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-danger-soft hover:text-danger"
               title="프로젝트 삭제"
               aria-label="프로젝트 삭제"
             >
@@ -493,7 +493,7 @@ function CreateProjectModal({
           </label>
 
           {error && (
-            <div className="whitespace-pre-line rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+            <div className="whitespace-pre-line rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
               {error}
             </div>
           )}

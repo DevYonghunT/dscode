@@ -19,57 +19,104 @@ function agentclassOrigin(): string {
 }
 
 /**
+ * 이 Next 프로세스에 학생 토큰(dsk_)이 이미 있는지. main.cjs 가 부팅 때 safeStorage
+ * 에서 읽어 주입했거나, 이전 issue-token 성공이 채워둔 값이다. 있으면 id_token
+ * 재검증 없이도 채팅이 가능하다 (실제 차단·만료 검증은 학교 프록시가 매 요청 수행).
+ */
+function hasStoredToken(): boolean {
+  return (process.env.ANTHROPIC_API_KEY || "").startsWith("dsk_");
+}
+
+/**
+ * 발급 실패 시의 공통 응답. Google id_token 은 발급 1시간 뒤 만료되는 반면 로그인
+ * 세션(JWT)은 30일 가므로, "세션은 살아있는데 id_token 으로 발급은 불가" 상태가
+ * 정상 사용 중에도 흔하게 발생한다. 그때 저장된 dsk_ 토큰이 있으면 채팅을 막을
+ * 이유가 없으므로 active 로 통과시킨다 (이 게이트는 안내용 UX 이고, blocked 등
+ * 실제 차단은 프록시가 토큰 검증으로 강제한다).
+ *
+ *   kind=session   → 재로그인하면 해결되는 경우 (id_token 없음/만료/검증 실패)
+ *   kind=transient → 재시도하면 해결될 수 있는 경우 (네트워크/프록시 일시 오류)
+ */
+function fallbackResponse(kind: "session" | "transient", message?: string) {
+  if (hasStoredToken()) {
+    return NextResponse.json({ status: "active", token: null, via: "stored" });
+  }
+  if (kind === "session") {
+    return NextResponse.json(
+      { status: "session_expired", token: null },
+      { status: 401 },
+    );
+  }
+  return NextResponse.json(
+    { status: "network_error", token: null, ...(message ? { message } : {}) },
+    { status: 502 },
+  );
+}
+
+/**
  * POST /api/issue-token
  *
  * 현재 NextAuth 세션의 Google id_token 으로 agentclass 에 승인 확인 + 사용 토큰
  * (dsk_) 발급을 요청한다. 학생은 토큰을 직접 입력하지 않는다.
  *
- * 응답(agentclass 그대로 relay):
- *   { status:'active', token:'dsk_...' }   — 승인됨, 채팅 사용 가능
- *   { status:'pending', token:null }       — 선생님 승인 대기
- *   { status:'blocked', token:null }       — 사용 제한
- *   { status:'api_disabled', token:null }  — API 일시 중지
- *   { status:'no_session', token:null }    — 로그인 세션에 id_token 없음 (401)
- *   { status:'network_error', ... }        — 프록시 연결 실패 (502)
+ * 응답:
+ *   { status:'active', token:'dsk_...' }     — 새로 발급됨, 채팅 사용 가능
+ *   { status:'active', token:null, via:'stored' }
+ *                                             — 발급은 실패했지만 저장 토큰으로 사용 가능
+ *   { status:'pending', token:null }          — 선생님 승인 대기
+ *   { status:'blocked', token:null }          — 사용 제한
+ *   { status:'api_disabled', token:null }     — API 일시 중지
+ *   { status:'session_expired', token:null }  — 재로그인 필요 (id_token 없음/만료) (401)
+ *   { status:'network_error', ... }           — 프록시 연결 실패, 재시도 (502)
  *
- * active 일 때: 이 라우트는 Next.js 자식 프로세스 안에서 실행되므로, 발급된 토큰을
- * 이 프로세스의 process.env.ANTHROPIC_API_KEY 에 즉시 반영한다 → 재시작 없이 다음
- * 채팅 요청(/api/chat 이 process.env.ANTHROPIC_API_KEY 를 매 요청 읽음)부터 적용.
- * 영구 저장(safeStorage)은 렌더러가 반환된 token 으로 window.dscode.persistToken 을
- * 호출해 처리한다(다음 앱 실행 때 main.cjs 가 주입).
+ * active(새 토큰) 일 때: 이 라우트는 Next.js 자식 프로세스 안에서 실행되므로, 발급된
+ * 토큰을 이 프로세스의 process.env.ANTHROPIC_API_KEY 에 즉시 반영한다 → 재시작 없이
+ * 다음 채팅 요청부터 적용. 영구 저장(safeStorage)은 렌더러가 반환된 token 으로
+ * window.dscode.persistToken 을 호출해 처리한다(다음 앱 실행 때 main.cjs 가 주입).
  */
 export async function POST() {
   const session = await auth();
   const idToken = (session as { googleIdToken?: string } | null)?.googleIdToken;
+
+  // id_token 없음 — googleIdToken 저장 기능 이전에 만들어진 구버전 세션이거나,
+  // 세션 자체가 없는 경우. 재로그인해야만 새 id_token 을 받을 수 있다.
   if (!idToken) {
-    return NextResponse.json(
-      { status: "no_session", token: null },
-      { status: 401 },
-    );
+    return fallbackResponse("session");
   }
+
   try {
     const r = await fetch(`${agentclassOrigin()}/api/dscode/issue-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken }),
     });
-    const j = (await r.json().catch(() => ({ status: "error", token: null }))) as {
+    const j = (await r.json().catch(() => ({}))) as {
       status?: string;
       token?: string | null;
     };
     // active + 토큰이면 이 Next 프로세스에 즉시 반영해 재시작 없이 채팅 가능하게 한다.
     if (r.ok && j?.status === "active" && typeof j.token === "string" && j.token) {
       process.env.ANTHROPIC_API_KEY = j.token;
+      return NextResponse.json(j);
     }
-    return NextResponse.json(j, { status: r.ok ? 200 : r.status });
-  } catch (e) {
-    return NextResponse.json(
-      {
-        status: "network_error",
-        token: null,
-        message: e instanceof Error ? e.message : String(e),
-      },
-      { status: 502 },
+    // id_token 검증을 통과한 확정 상태 — 저장 토큰 유무와 무관하게 그대로 보여준다.
+    if (
+      j?.status === "pending" ||
+      j?.status === "blocked" ||
+      j?.status === "api_disabled"
+    ) {
+      return NextResponse.json(j);
+    }
+    // 401 = id_token 검증 실패(만료 포함) → 재로그인으로 해결.
+    // 그 외(5xx 등)는 프록시 쪽 일시 오류 → 재시도로 해결될 수 있음.
+    console.error(`[issue-token] relay failed: HTTP ${r.status}`, j);
+    return fallbackResponse(
+      r.status === 401 ? "session" : "transient",
+      `HTTP ${r.status}`,
     );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[issue-token] relay network error:", msg);
+    return fallbackResponse("transient", msg);
   }
 }

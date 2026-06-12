@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "dist-electron/**",
     "next-env.d.ts",
   ]),
   {
@@ -16,6 +17,13 @@ const eslintConfig = defineConfig([
       // We intentionally sync local UI state with props/path on change.
       // This is a valid pattern for the cases in this app.
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    // Electron main/preload 은 CommonJS(.cjs) 라 require() 가 정상이다.
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 ]);

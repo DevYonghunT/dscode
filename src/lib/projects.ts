@@ -60,20 +60,60 @@ function projectsParent(email: string): string {
 }
 
 async function readManifest(email: string): Promise<Manifest> {
+  const p = manifestPath(email);
+  let raw: string;
   try {
-    const raw = await fs.readFile(manifestPath(email), "utf8");
+    raw = await fs.readFile(p, "utf8");
+  } catch (e) {
+    // 파일이 없으면(최초 실행) 빈 manifest로 정상 처리.
+    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return { projects: [] };
+    throw e;
+  }
+  // 파일은 있는데 파싱이 안 되면 "손상"으로 간주한다. 빈값으로 폴백하면
+  // 이어지는 createProject 등이 빈 배열을 덮어써 기존 프로젝트가 영구 소실되므로,
+  // 손상 파일을 백업해 두고 명확한 Error를 던져 후속 덮어쓰기를 차단한다.
+  try {
     const parsed = JSON.parse(raw) as Manifest;
     if (Array.isArray(parsed.projects)) return parsed;
-  } catch {
-    /* fall through */
+    throw new Error("projects 배열이 없습니다.");
+  } catch (e) {
+    await backupCorrupt(p);
+    throw new Error(
+      `projects.json이 손상되어 읽을 수 없습니다 (백업 후 중단). 원인: ${
+        (e as Error)?.message ?? e
+      }`,
+    );
   }
-  return { projects: [] };
+}
+
+/**
+ * 원자적 쓰기: 같은 디렉터리에 <파일>.tmp 로 먼저 쓴 뒤 rename 한다.
+ * rename 은 동일 파일시스템에서 원자적이라, 쓰기 도중 크래시해도
+ * 기존 파일이 반쪽짜리로 깨지지 않는다.
+ */
+async function writeFileAtomic(
+  p: string,
+  data: string,
+  mode: number,
+): Promise<void> {
+  const tmp = `${p}.tmp`;
+  await fs.writeFile(tmp, data, { mode, encoding: "utf8" });
+  await fs.rename(tmp, p);
+}
+
+/** 손상된 파일을 <파일>.corrupt-<timestamp> 로 백업(rename)한다. */
+async function backupCorrupt(p: string): Promise<void> {
+  try {
+    await fs.rename(p, `${p}.corrupt-${Date.now()}`);
+  } catch {
+    /* 백업 실패해도 원본을 덮어쓰지 않는 게 핵심이므로 무시 */
+  }
 }
 
 async function writeManifest(email: string, m: Manifest): Promise<void> {
   const p = manifestPath(email);
   await fs.mkdir(path.dirname(p), { recursive: true });
-  await fs.writeFile(p, JSON.stringify(m, null, 2), { mode: 0o600, encoding: "utf8" });
+  await writeFileAtomic(p, JSON.stringify(m, null, 2), 0o600);
 }
 
 function newProjectId(): string {

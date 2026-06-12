@@ -15,7 +15,10 @@
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
   --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-strong: #b91c1c;
   --success: #059669;
+  --gold-strong: #b45309;
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
   --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
   --shadow-lg: 0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
@@ -46,7 +49,10 @@
   --border: #27272a;
   --border-strong: #3f3f46;
   --danger: #f87171;
+  --danger-soft: #3a1212;
+  --danger-strong: #ef4444;
   --success: #34d399;
+  --gold-strong: #d97706;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
@@ -106,7 +112,10 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-strong: var(--danger-strong);
   --color-success: var(--success);
+  --color-gold-strong: var(--gold-strong);
   --font-sans:
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
     "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;

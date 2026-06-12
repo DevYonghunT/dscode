@@ -219,7 +219,7 @@ export function SettingsModal({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-fg">위험 구역</h3>
             {confirmReset ? (
-              <div className="space-y-2 rounded-lg border border-danger/30 bg-red-50 p-3">
+              <div className="space-y-2 rounded-lg border border-danger/30 bg-danger-soft p-3">
                 <p className="text-xs text-danger">
                   <strong>현재 프로젝트</strong> 안의 모든 파일과 대화 이력이 영구
                   삭제됩니다. 다른 프로젝트는 영향 없음. 계속하시겠어요?
@@ -228,7 +228,7 @@ export function SettingsModal({
                   <button
                     onClick={handleReset}
                     disabled={resetting}
-                    className="flex-1 rounded-lg bg-danger px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-danger px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-danger-strong disabled:opacity-50"
                   >
                     {resetting ? "삭제 중…" : "삭제 확인"}
                   </button>
@@ -243,7 +243,7 @@ export function SettingsModal({
             ) : (
               <button
                 onClick={() => setConfirmReset(true)}
-                className="flex w-full items-center justify-between rounded-lg border border-border bg-bg px-3 py-2 text-xs text-fg-muted transition-colors hover:border-danger/30 hover:bg-red-50 hover:text-danger"
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-bg px-3 py-2 text-xs text-fg-muted transition-colors hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
               >
                 <span className="flex items-center gap-2">
                   <Trash2 className="h-3.5 w-3.5" />
@@ -357,7 +357,7 @@ function IntegrationCard({
           <button
             onClick={disconnect}
             disabled={busy}
-            className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-danger/30 hover:bg-red-50 hover:text-danger disabled:opacity-50"
+            className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-danger/30 hover:bg-danger-soft hover:text-danger disabled:opacity-50"
           >
             연결 해제
           </button>

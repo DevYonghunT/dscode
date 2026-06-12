@@ -18,6 +18,7 @@
 
 const { app, BrowserWindow, Menu, shell, ipcMain, safeStorage, dialog, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
+const crypto = require('node:crypto')
 const fs = require('node:fs')
 const http = require('node:http')
 const net = require('node:net')
@@ -91,6 +92,7 @@ const DEFAULT_PROXY_URL =
 const PROXY_BASE_URL = process.env.DSCODE_PROXY_BASE_URL || DEFAULT_PROXY_URL
 
 const TOKEN_FILE = path.join(app.getPath('userData'), 'api-token.bin')
+const AUTH_SECRET_FILE = path.join(app.getPath('userData'), 'auth-secret.bin')
 const LOG_FILE = path.join(app.getPath('userData'), 'main.log')
 
 let mainWindow = null
@@ -158,6 +160,35 @@ function clearToken() {
   if (fs.existsSync(TOKEN_FILE)) fs.unlinkSync(TOKEN_FILE)
 }
 
+// ── 기기별 세션 서명키 (AUTH_SECRET) ─────────────────────────────────────────
+// 빌드에 포함된 .env.production 의 고정 AUTH_SECRET 을 쓰지 않는다. 고정값이
+// 배포본에 평문으로 들어가면(=모든 학생 PC 동일) 유출 시 임의 학생의 NextAuth
+// JWT 를 위조할 수 있고, 같은 값이 secrets 암호화 키 파생에도 쓰여 저장 토큰까지
+// 복호화된다. 그래서 기기마다 1회 무작위 생성해 userData(사용자 전용, 배포본 밖)
+// 에 저장한 값을 자식 Next 에 주입한다. 프로세스 env 가 .env 파일보다 우선이라
+// NextAuth 는 이 값을 쓴다.
+let cachedAuthSecret = null
+function getMachineAuthSecret() {
+  if (cachedAuthSecret) return cachedAuthSecret
+  try {
+    const v = fs.readFileSync(AUTH_SECRET_FILE, 'utf8').trim()
+    if (v) {
+      cachedAuthSecret = v
+      return cachedAuthSecret
+    }
+  } catch {
+    /* 파일 없음 → 아래에서 생성 */
+  }
+  cachedAuthSecret = crypto.randomBytes(32).toString('base64')
+  try {
+    fs.writeFileSync(AUTH_SECRET_FILE, cachedAuthSecret, { mode: 0o600 })
+  } catch (e) {
+    // 저장 실패 시 이번 실행 동안만 유효한 값 사용(다음 실행 때 재생성 → 재로그인 필요).
+    console.error(`[auth-secret] persist 실패, 휘발성 값 사용: ${e.message}`)
+  }
+  return cachedAuthSecret
+}
+
 // ── Next.js 자식 프로세스 ─────────────────────────────────────────────────────
 
 function buildChildEnv(token) {
@@ -194,6 +225,10 @@ function buildChildEnv(token) {
     env.NEXTAUTH_URL = env.AUTH_URL
     env.AUTH_TRUST_HOST = 'true'
   }
+
+  // 세션 서명키는 빌드에 박힌 고정값 대신 기기별 생성값으로 강제 덮어쓴다.
+  // (process env 가 .env.production 보다 우선 → NextAuth 가 이 값을 사용)
+  env.AUTH_SECRET = getMachineAuthSecret()
 
   // TLS: 학교/백신/방화벽이 HTTPS 를 가로채 자체 서명 CA 를 끼우는 환경(SSL inspection)
   // 에서 NextAuth 의 Google 토큰 교환 fetch 가 SELF_SIGNED_CERT_IN_CHAIN 으로 실패한다.
@@ -240,7 +275,10 @@ function spawnNext(token) {
   try {
     proc = spawn(
       process.execPath,
-      [nextEntry, NEXT_MODE, '-p', String(NEXT_PORT)],
+      // -H 127.0.0.1: 루프백에만 바인딩. 미지정 시 Next 기본값은 0.0.0.0(전체
+      // 인터페이스)이라, 학생 PC 의 파일/채팅 API 와 학생 토큰을 보유한 이 서버가
+      // 교내 LAN 의 다른 기기에 노출된다. 데스크톱 단일 사용자라 외부 노출은 불필요.
+      [nextEntry, NEXT_MODE, '-p', String(NEXT_PORT), '-H', '127.0.0.1'],
       {
         cwd: PROJECT_ROOT,
         env: { ...buildChildEnv(token), ELECTRON_RUN_AS_NODE: '1' },
@@ -289,6 +327,64 @@ async function waitForNext(timeoutMs = 30000) {
 
 // ── 윈도우 ──────────────────────────────────────────────────────────────────
 
+/**
+ * 부팅 즉시 보여줄 스플래시 마크업. data: URL 로 로드되므로 외부 스크립트/링크
+ * 없이 인라인 정적 HTML/CSS 만 사용한다(스플래시 창에도 동일 preload 가 붙음).
+ * luxury 톤: 흰/네이비 배경 + gold accent, 보라 그라데이션 금지, 중앙 브랜딩 +
+ * "준비 중..." + 부드러운 펄스. 다크 모드는 prefers-color-scheme 로 토큰 swap.
+ */
+function splashHtml() {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      :root{--bg:#f8fafc;--fg:#1e293b;--muted:#64748b;--gold:#f59e0b;}
+      @media (prefers-color-scheme: dark){
+        :root{--bg:#0f0f11;--fg:#f8fafc;--muted:#94a3b8;--gold:#f59e0b;}
+      }
+      *{margin:0;padding:0;box-sizing:border-box;}
+      html,body{height:100%;}
+      body{
+        display:flex;align-items:center;justify-content:center;
+        background:var(--bg);color:var(--fg);
+        font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Segoe UI',sans-serif;
+        -webkit-user-select:none;user-select:none;
+      }
+      .wrap{display:flex;flex-direction:column;align-items:center;gap:24px;}
+      .brand{display:flex;align-items:center;gap:14px;}
+      .dot{
+        width:14px;height:14px;border-radius:9999px;background:var(--gold);
+        animation:pulse 1.6s ease-in-out infinite;
+      }
+      .name{
+        font-size:32px;font-weight:700;letter-spacing:-0.02em;
+        font-family:'Outfit',-apple-system,sans-serif;
+      }
+      .name .accent{color:var(--gold);}
+      .status{font-size:14px;font-weight:500;color:var(--muted);animation:fade 1.6s ease-in-out infinite;}
+      @keyframes pulse{
+        0%,100%{transform:scale(1);opacity:1;}
+        50%{transform:scale(0.65);opacity:0.45;}
+      }
+      @keyframes fade{
+        0%,100%{opacity:0.55;}
+        50%{opacity:1;}
+      }
+    </style></head>
+    <body><div class="wrap">
+      <div class="brand">
+        <span class="dot"></span>
+        <span class="name">DS <span class="accent">Code</span></span>
+      </div>
+      <div class="status">준비 중...</div>
+    </div></body></html>`
+}
+
+/**
+ * 메인 BrowserWindow 를 생성하고 즉시 스플래시(data: URL)를 로드한다.
+ * Next 부팅 완료를 기다리지 않고 먼저 호출돼 앱 실행 직후 창이 뜨게 한다.
+ * 실제 앱 URL 전환은 loadAppURL() 이 담당. webPreferences/preload/
+ * setWindowOpenHandler 등 기존 옵션은 그대로 보존한다.
+ */
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -308,8 +404,10 @@ function createMainWindow() {
     },
   })
 
-  const url = EXTERNAL_URL || `http://localhost:${NEXT_PORT}/dscode`
-  mainWindow.loadURL(url).catch((err) => loadErrorPage(url, err.message))
+  // 부팅 즉시 스플래시 표시 (Next ready 후 loadAppURL() 이 실제 앱으로 교체)
+  mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml())}`).catch(() => {
+    /* 스플래시 로드 실패는 치명적이지 않음 — 곧 실제 URL 로 교체됨 */
+  })
 
   if (process.env.DSCODE_DEV_TOOLS === '1') {
     mainWindow.webContents.openDevTools({ mode: 'right' })
@@ -323,6 +421,16 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+/**
+ * 스플래시가 떠 있는 같은 창을 실제 앱 URL 로 전환한다(Next ready 후 호출).
+ * 창 옵션/preload 는 createMainWindow 의 것을 그대로 재사용한다.
+ */
+function loadAppURL() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const url = EXTERNAL_URL || `http://localhost:${NEXT_PORT}/dscode`
+  mainWindow.loadURL(url).catch((err) => loadErrorPage(url, err.message))
 }
 
 function loadErrorPage(url, message) {
@@ -341,30 +449,41 @@ function loadErrorPage(url, message) {
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function bootstrapWithToken(token) {
-  if (!EXTERNAL_URL) {
-    // 포트가 고정되지 않았으면 PORT_POOL(3000~3009) 중 빈 포트 선택.
-    // OAuth redirect_uri 가 이 포트에 맞아야 하므로 Google Console 에 10개 등록 필수.
-    if (!FIXED_PORT) {
-      const picked = await pickPoolPort()
-      if (picked) {
-        NEXT_PORT = picked
-        console.log(`[dscode-electron] picked pool port ${NEXT_PORT}`)
-      } else {
-        // 풀 전체가 막힘 — 그래도 3000 으로 시도(에러는 ready 타임아웃으로 안내)
-        NEXT_PORT = 3000
-        console.error('[dscode-electron] all pool ports busy, forcing 3000')
-      }
-    }
-    console.log(`[dscode-electron] Next.js (${NEXT_MODE}) on :${NEXT_PORT}, proxy=${PROXY_BASE_URL}`)
-    nextProcess = spawnNext(token)
-    const ready = await waitForNext(NEXT_MODE === 'dev' ? 60000 : 30000)
-    if (!ready) {
-      console.error('[dscode-electron] Next.js did not become ready in time')
+  // 창을 먼저 띄워 스플래시를 보여준다(Next 부팅을 기다리지 않음). 학생이 앱이
+  // 실행됐는지 알 수 있어 수 초간 빈 화면 → 중복 실행하는 문제를 막는다.
+  createMainWindow()
+
+  if (EXTERNAL_URL) {
+    // 외부 URL 모드는 Next spawn 없이 바로 전환.
+    loadAppURL()
+    return
+  }
+
+  // 포트가 고정되지 않았으면 PORT_POOL(3000~3009) 중 빈 포트 선택.
+  // OAuth redirect_uri 가 이 포트에 맞아야 하므로 Google Console 에 10개 등록 필수.
+  if (!FIXED_PORT) {
+    const picked = await pickPoolPort()
+    if (picked) {
+      NEXT_PORT = picked
+      console.log(`[dscode-electron] picked pool port ${NEXT_PORT}`)
     } else {
-      console.log('[dscode-electron] Next.js is ready')
+      // 풀 전체가 막힘 — 그래도 3000 으로 시도(에러는 ready 타임아웃으로 안내)
+      NEXT_PORT = 3000
+      console.error('[dscode-electron] all pool ports busy, forcing 3000')
     }
   }
-  createMainWindow()
+  console.log(`[dscode-electron] Next.js (${NEXT_MODE}) on :${NEXT_PORT}, proxy=${PROXY_BASE_URL}`)
+  nextProcess = spawnNext(token)
+  const ready = await waitForNext(NEXT_MODE === 'dev' ? 60000 : 30000)
+  if (!ready) {
+    console.error('[dscode-electron] Next.js did not become ready in time')
+    // 실패 시 기존 에러 페이지 경로 유지(스플래시 창을 에러 페이지로 교체).
+    loadErrorPage(`http://localhost:${NEXT_PORT}/dscode`, 'Next.js 가 제한 시간 내에 준비되지 않았습니다')
+  } else {
+    console.log('[dscode-electron] Next.js is ready')
+    // 같은 창의 스플래시를 실제 앱 URL 로 전환.
+    loadAppURL()
+  }
 }
 
 function bootstrap() {
@@ -461,10 +580,27 @@ function buildMenu() {
 
 // ── App lifecycle ───────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(buildMenu())
-  bootstrap()
-})
+// 중복 실행 방지: 락을 못 얻으면(이미 다른 인스턴스 실행 중) 즉시 종료한다.
+// 스플래시가 떠도 학생이 모르고 두 번 실행하는 경우가 있어, 두 번째 실행은
+// 새 창을 띄우지 않고 기존 창을 앞으로 가져온다.
+const gotInstanceLock = app.requestSingleInstanceLock()
+if (!gotInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    // 두 번째 실행 시도 → 기존 창 복원/포커스
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(buildMenu())
+    bootstrap()
+  })
+}
 
 function killNext() {
   if (nextProcess && !nextProcess.killed) {

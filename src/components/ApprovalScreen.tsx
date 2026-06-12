@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Clock, ShieldX, PauseCircle, RefreshCw } from "lucide-react";
+import { Loader2, Clock, ShieldX, PauseCircle, RefreshCw, LogIn } from "lucide-react";
 import { Emblem } from "./Emblem";
 
 /** 로그인은 됐지만 아직 채팅을 쓸 수 없는 승인 상태들. */
@@ -9,13 +9,16 @@ export type ApprovalState =
   | "pending" // 선생님 승인 대기
   | "blocked" // 사용 제한
   | "api_disabled" // API 일시 중지
-  | "error"; // 네트워크/세션 등 일시적 오류 (재시도 가능)
+  | "session_expired" // id_token 없음/만료 — 재로그인 필요
+  | "error"; // 네트워크 등 일시적 오류 (재시도 가능)
 
 type Copy = {
   icon: React.ReactNode;
   title: string;
   body: string;
   tone: "neutral" | "warn" | "danger";
+  /** onRetry 버튼의 라벨/아이콘. 기본은 "다시 확인" + 새로고침 아이콘. */
+  action?: { label: string; icon: React.ReactNode };
 };
 
 const COPY: Record<Exclude<ApprovalState, "checking">, Copy> = {
@@ -36,6 +39,16 @@ const COPY: Record<Exclude<ApprovalState, "checking">, Copy> = {
     title: "사용이 일시 중지됐어요",
     body: "지금은 AI 사용이 잠시 중지된 상태입니다. 잠시 후 다시 시도하거나 선생님께 문의해주세요.",
     tone: "warn",
+  },
+  session_expired: {
+    icon: <LogIn className="h-6 w-6 text-gold" aria-hidden="true" />,
+    title: "다시 로그인이 필요해요",
+    body: "로그인 정보가 만료됐어요. 다시 로그인하면 승인 확인과 토큰 발급이 자동으로 진행됩니다.",
+    tone: "neutral",
+    action: {
+      label: "다시 로그인",
+      icon: <LogIn className="h-4 w-4 text-fg-muted" aria-hidden="true" />,
+    },
   },
   error: {
     icon: <RefreshCw className="h-6 w-6 text-fg-muted" aria-hidden="true" />,
@@ -89,8 +102,10 @@ export function ApprovalScreen({
                   onClick={onRetry}
                   className="mt-1 flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 text-sm font-medium text-fg shadow-sm transition-all hover:border-border-strong hover:shadow"
                 >
-                  <RefreshCw className="h-4 w-4 text-fg-muted" aria-hidden="true" />
-                  다시 확인
+                  {COPY[state].action?.icon ?? (
+                    <RefreshCw className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+                  )}
+                  {COPY[state].action?.label ?? "다시 확인"}
                 </button>
               )}
             </div>

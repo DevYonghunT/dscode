@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 import { Header } from "@/components/Header";
 import { SessionTree } from "@/components/SessionTree";
 import { FileViewer } from "@/components/FileViewer";
@@ -15,8 +16,11 @@ import { apiUrl } from "@/lib/client/url";
 import type { ChatTurn, Project } from "@/lib/client/types";
 import {
   DEFAULT_MODEL,
+  DEFAULT_EFFORT,
   isModelId,
+  isEffortId,
   type ModelId,
+  type EffortId,
 } from "@/lib/client/models";
 
 type MeUser = {
@@ -41,6 +45,7 @@ type ApprovalUi = "active" | ApprovalState;
 const DEFAULT_PROJECT_ID = "default";
 const ACTIVE_PROJECT_LS_KEY = "dscode_active_project";
 const MODEL_LS_KEY = "dscode_model";
+const EFFORT_LS_KEY = "dscode_effort";
 
 export default function Home() {
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -55,6 +60,7 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL);
+  const [effort, setEffort] = useState<EffortId>(DEFAULT_EFFORT);
 
   const {
     turns,
@@ -65,7 +71,7 @@ export default function Home() {
     startNewSession,
     loadTurns,
     currentSessionId,
-  } = useChat({ projectId: activeProjectId, model });
+  } = useChat({ projectId: activeProjectId, model, effort });
 
   const activeProject =
     projects.find((p) => p.id === activeProjectId) || projects[0] || null;
@@ -92,10 +98,12 @@ export default function Home() {
   // ── 승인 확인 + 토큰 자동 발급 ──────────────────────────────────────────────
   // 로그인(세션) 성공 후, 앱(서버) 가 세션의 Google id_token 으로 agentclass 에
   // 승인 확인 + dsk_ 토큰 발급을 요청한다. 학생은 토큰을 직접 입력하지 않는다.
-  //   active       → 토큰을 OS 보안저장소에 저장(다음 실행 대비). 현재 세션 채팅은
-  //                  issue-token 라우트가 Next 프로세스 env 를 이미 갱신해 즉시 가능.
+  //   active(token 있음) → 토큰을 OS 보안저장소에 저장(다음 실행 대비). 현재 세션
+  //                  채팅은 issue-token 라우트가 Next env 를 이미 갱신해 즉시 가능.
+  //   active(token 없음, via:'stored') → 발급은 실패했지만 저장된 토큰으로 사용 가능.
   //   pending/blocked/api_disabled → 상태 화면 표시(채팅 비활성)
-  //   no_session/network 등 → error 상태(재시도 버튼)
+  //   session_expired → 재로그인 안내 (id_token 없음/만료, 저장 토큰도 없음)
+  //   network_error 등 → error 상태(재시도 버튼)
   const issueToken = useCallback(async () => {
     setApproval("checking");
     try {
@@ -105,27 +113,37 @@ export default function Home() {
         token?: string | null;
       };
       const status = j?.status;
-      if (status === "active" && typeof j.token === "string" && j.token) {
-        // OS 보안저장소에 저장(데스크톱 앱일 때만). 실패해도 현재 세션은 동작하므로 무시.
-        try {
-          await window.dscode?.persistToken?.(j.token);
-        } catch {
-          /* 저장 실패: 다음 실행 때 다시 발급됨 */
+      if (status === "active") {
+        if (typeof j.token === "string" && j.token) {
+          // OS 보안저장소에 저장(데스크톱 앱일 때만). 실패해도 현재 세션은 동작하므로 무시.
+          try {
+            await window.dscode?.persistToken?.(j.token);
+          } catch {
+            /* 저장 실패: 다음 실행 때 다시 발급됨 */
+          }
         }
         setApproval("active");
       } else if (
         status === "pending" ||
         status === "blocked" ||
-        status === "api_disabled"
+        status === "api_disabled" ||
+        status === "session_expired"
       ) {
         setApproval(status);
       } else {
-        // no_session / network_error / error / 알 수 없음 → 재시도 가능한 오류
+        // network_error / 알 수 없음 → 재시도 가능한 오류
         setApproval("error");
       }
     } catch {
       setApproval("error");
     }
+  }, []);
+
+  // session_expired 의 "다시 로그인" — 만료된 세션을 지우고 로그인 화면으로.
+  // 재로그인하면 fresh id_token 으로 issueToken 이 다시 돈다.
+  const reloginForToken = useCallback(async () => {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    await signOut({ callbackUrl: `${basePath}/` });
   }, []);
 
   // user 가 확정되면 토큰 발급을 시도. user 가 없어지면(로그아웃) 상태 초기화.
@@ -175,11 +193,13 @@ export default function Home() {
     }
   }, [activeProjectId]);
 
-  // Restore the saved model once on mount.
+  // Restore the saved model + effort once on mount.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(MODEL_LS_KEY);
       if (saved && isModelId(saved)) setModel(saved);
+      const savedEffort = localStorage.getItem(EFFORT_LS_KEY);
+      if (savedEffort && isEffortId(savedEffort)) setEffort(savedEffort);
     } catch {
       /* ignore */
     }
@@ -189,6 +209,15 @@ export default function Home() {
     setModel(next);
     try {
       localStorage.setItem(MODEL_LS_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function changeEffort(next: EffortId) {
+    setEffort(next);
+    try {
+      localStorage.setItem(EFFORT_LS_KEY, next);
     } catch {
       /* ignore */
     }
@@ -219,12 +248,17 @@ export default function Home() {
   // ── Project / session transitions ────────────────────────────────────────
   function selectProject(id: string) {
     if (id === activeProjectId) return;
+    // 진행 중 스트림을 먼저 abort. 안 하면 이전 send 가 busy 를 물고 있고
+    // SSE 가 새 화면의 세션 ID 를 계속 덮어쓴다(busy 고착 + 세션 ID 오염).
+    stop();
     setActiveProjectId(id);
     setSelectedFile(null);
     resetChat();
   }
 
   function newSessionFor(projectId: string) {
+    // 진행 중 스트림 abort 후 새 세션 시작(전환 중 이전 스트림 오염 방지).
+    stop();
     if (projectId !== activeProjectId) {
       setActiveProjectId(projectId);
       setSelectedFile(null);
@@ -234,6 +268,8 @@ export default function Home() {
   }
 
   async function selectSession(projectId: string, sessionId: string) {
+    // 진행 중 스트림 abort 후 과거 세션 로드(전환 중 이전 스트림 오염 방지).
+    stop();
     if (projectId !== activeProjectId) {
       setActiveProjectId(projectId);
       setSelectedFile(null);
@@ -284,11 +320,13 @@ export default function Home() {
       <ApprovalScreen
         state={approval ?? "checking"}
         onRetry={
-          approval === "error" ||
-          approval === "pending" ||
-          approval === "api_disabled"
-            ? issueToken
-            : undefined
+          approval === "session_expired"
+            ? reloginForToken
+            : approval === "error" ||
+                approval === "pending" ||
+                approval === "api_disabled"
+              ? issueToken
+              : undefined
         }
       />
     );
@@ -329,6 +367,8 @@ export default function Home() {
               onFilePathClick={setSelectedFile}
               model={model}
               onChangeModel={changeModel}
+              effort={effort}
+              onChangeEffort={changeEffort}
             />
           }
           right={

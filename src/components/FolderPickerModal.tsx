@@ -212,7 +212,7 @@ export function FolderPickerModal({
             </div>
           )}
           {error && (
-            <div className="m-3 rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+            <div className="m-3 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
               {error}
             </div>
           )}

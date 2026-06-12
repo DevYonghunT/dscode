@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { memo, useMemo, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { User, AlertCircle, Copy, Check } from "lucide-react";
 import type { ChatTurn } from "@/lib/client/types";
@@ -15,35 +15,17 @@ type Props = {
   onFilePathClick?: (path: string) => void;
 };
 
-// Looks like a file path: at least one slash OR a recognizable extension.
-const FILE_PATH_RE =
-  /^(?:\.{1,2}\/)?[\w.\-]+(?:\/[\w.\-]+)*\.[a-zA-Z0-9]{1,8}$/;
-
-function looksLikeFilePath(s: string): boolean {
-  if (!s) return false;
-  if (s.length > 200) return false;
-  if (s.startsWith("/") || s.startsWith("~")) return false; // absolute → not a workspace-relative path
-  if (s.includes(" ")) return false;
-  if (s.includes("://")) return false;
-  return FILE_PATH_RE.test(s);
-}
-
-export function MessageBubble({ turn, onFilePathClick }: Props) {
-  const isUser = turn.role === "user";
-  const hasAttachments = (turn.attachments?.length ?? 0) > 0;
-
-  // ReactMarkdown component override: inline `code` whose content looks like
-  // a workspace-relative file path becomes a clickable button.
-  const markdownComponents = {
-    code(props: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) {
+// ReactMarkdown 의 components 매핑을 만드는 팩토리. 매 렌더마다 객체를 새로
+// 만들면 ReactMarkdown 이 매번 재파싱하므로, onFilePathClick 별로 한 번만
+// 만들어 useMemo 로 캐싱한다(아래 컴포넌트 내부). onFilePathClick 이 없을 때는
+// 모듈 레벨 상수(EMPTY_COMPONENTS)를 재사용해 참조 안정성을 보장한다.
+function buildMarkdownComponents(
+  onFilePathClick: (path: string) => void,
+): Components {
+  return {
+    code(props) {
       const text = childToText(props.children);
-      // Only inline code: a `pre > code` will have block CSS; we let the
-      // default styling render code blocks, never link them.
-      const isBlock = (props as { node?: { tagName?: string } })?.node?.tagName === "code"
-        ? false
-        : false;
-      void isBlock;
-      if (onFilePathClick && looksLikeFilePath(text)) {
+      if (looksLikeFilePath(text)) {
         return (
           <code
             role="button"
@@ -69,6 +51,35 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
       return <code {...props}>{props.children}</code>;
     },
   };
+}
+
+// onFilePathClick 이 없으면 파일 경로 링크 기능이 불필요하므로 빈 매핑을 공유한다.
+const EMPTY_COMPONENTS: Components = {};
+
+// Looks like a file path: at least one slash OR a recognizable extension.
+const FILE_PATH_RE =
+  /^(?:\.{1,2}\/)?[\w.\-]+(?:\/[\w.\-]+)*\.[a-zA-Z0-9]{1,8}$/;
+
+function looksLikeFilePath(s: string): boolean {
+  if (!s) return false;
+  if (s.length > 200) return false;
+  if (s.startsWith("/") || s.startsWith("~")) return false; // absolute → not a workspace-relative path
+  if (s.includes(" ")) return false;
+  if (s.includes("://")) return false;
+  return FILE_PATH_RE.test(s);
+}
+
+function MessageBubbleInner({ turn, onFilePathClick }: Props) {
+  const isUser = turn.role === "user";
+  const hasAttachments = (turn.attachments?.length ?? 0) > 0;
+
+  // ReactMarkdown components 매핑을 onFilePathClick 별로 한 번만 생성해 캐싱.
+  // (매 렌더마다 새 객체를 넘기면 ReactMarkdown 이 매번 재파싱한다.)
+  const markdownComponents = useMemo(
+    () =>
+      onFilePathClick ? buildMarkdownComponents(onFilePathClick) : EMPTY_COMPONENTS,
+    [onFilePathClick],
+  );
 
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
@@ -106,12 +117,19 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
                   isUser ? "text-white [&_strong]:text-white [&_code]:bg-white/10 [&_code]:text-white" : "text-fg"
                 }`}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {turn.text}
-                </ReactMarkdown>
+                {turn.isStreaming ? (
+                  // 스트리밍 중에는 토큰마다 마크다운을 재파싱하면 O(n^2) 비용이
+                  // 들어 메인스레드를 점유한다. 도중에는 plain text(공백 보존)로
+                  // 가볍게 렌더하고, done(isStreaming=false) 시 마크다운으로 전환.
+                  <p className="whitespace-pre-wrap break-words">{turn.text}</p>
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
+                    {turn.text}
+                  </ReactMarkdown>
+                )}
                 {turn.isStreaming && (
                   <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse-soft bg-gold" />
                 )}
@@ -131,7 +149,7 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
           </div>
         ) : null}
         {turn.error && (
-          <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-xs text-danger">
+          <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span className="whitespace-pre-line">{turn.error}</span>
           </div>
@@ -145,6 +163,11 @@ export function MessageBubble({ turn, onFilePathClick }: Props) {
     </div>
   );
 }
+
+// React.memo: turn(객체)/onFilePathClick 이 동일하면 리렌더를 건너뛴다.
+// onFilePathClick 은 Chat.tsx 에서 useCallback 으로 안정화되고, 스트리밍 중
+// 변경되는 버블은 마지막 turn 만이므로 나머지 버블의 마크다운 재파싱을 피한다.
+export const MessageBubble = memo(MessageBubbleInner);
 
 function ThinkingIndicator() {
   return (
@@ -190,7 +213,7 @@ function CopyButton({ text, isUser }: { text: string; isUser: boolean }) {
           : "border-border bg-bg-elevated text-fg-muted hover:bg-bg-sunken hover:text-fg"
       }`}
     >
-      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
     </button>
   )
 }
