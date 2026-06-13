@@ -25,6 +25,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
     Google({
+      // 데스크톱(공개) 클라이언트로 동작시킨다. 이 앱은 학생 PC 안에서 도는 로컬
+      // Next 서버라 client_secret 을 안전하게 보관할 수 없는 "공개 클라이언트"다.
+      // Google "데스크톱 앱" OAuth 클라이언트 + PKCE 를 쓰고, 토큰 교환에
+      // client_secret 을 보내지 않는다(token_endpoint_auth_method: "none").
+      //   → AUTH_GOOGLE_SECRET 을 배포 번들에 넣지 않아도 되고(유출될 기밀 제거),
+      //     PKCE(code_verifier)가 인가코드 가로채기를 막는다.
+      // ⚠️ 전제: Google Cloud Console 에서 클라이언트 유형이 "데스크톱 앱"이어야
+      //    한다(웹 애플리케이션 유형은 토큰 교환에 secret 을 요구해 실패한다).
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: undefined,
+      client: { token_endpoint_auth_method: "none" },
+      checks: ["pkce", "state", "nonce"],
       authorization: {
         params: {
           hd: ALLOWED_DOMAIN,
