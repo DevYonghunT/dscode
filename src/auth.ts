@@ -25,6 +25,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
     Google({
+      // 프로덕션은 Google "데스크톱 앱"(공개) 클라이언트라 client_secret 이 없다.
+      // secret 이 없으면 토큰 교환 시 클라이언트 인증을 보내지 않고(none) PKCE 로만
+      // 검증한다. secret 이 없는데 이 설정이 없으면 Auth.js 기본값(client_secret_basic)
+      // 으로 빈 secret 을 보내 Google 이 "invalid_client" 로 거부한다.
+      // (secret 이 있으면 — dev 웹 클라이언트 — 기본 동작 유지)
+      ...(process.env.AUTH_GOOGLE_SECRET
+        ? {}
+        : {
+            client: { token_endpoint_auth_method: "none" },
+            checks: ["pkce", "state", "nonce"] as ("pkce" | "state" | "nonce")[],
+          }),
       authorization: {
         params: {
           hd: ALLOWED_DOMAIN,

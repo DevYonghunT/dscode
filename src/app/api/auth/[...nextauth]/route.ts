@@ -5,9 +5,16 @@ import { handlers, BASE_PATH } from "@/auth";
  * Next.js strips its configured basePath (/dscode) from `request.url` before
  * handing the request to the route handler. But NextAuth's `basePath`
  * (/dscode/api/auth) needs to see the full URL so its URL-derived redirect_uri
- * matches what we register in Google Cloud Console.
+ * lands under /dscode.
  *
  * We rebuild the request with the /dscode prefix re-added before forwarding.
+ *
+ * NOTE on host: `next start` always fills the request URL host as `localhost`
+ * (it ignores the Host header), and NextAuth derives the OAuth redirect_uri from
+ * that origin. We do NOT try to rewrite it to 127.0.0.1 — NextRequest forces the
+ * host back to `localhost` regardless. So the whole app is kept on `localhost`
+ * (BrowserWindow + AUTH_URL) and the Google client is a "Desktop app" type, which
+ * accepts http://localhost:<port> loopback redirects on any port.
  */
 function rewrap(h: (req: NextRequest, ctx?: unknown) => Response | Promise<Response>) {
   return async (req: NextRequest, ctx?: unknown) => {

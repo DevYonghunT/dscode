@@ -24,11 +24,16 @@ const http = require('node:http')
 const net = require('node:net')
 const path = require('node:path')
 
-// 포트 전략 — OAuth(Google) redirect_uri 가 고정 URL 을 요구하므로, 완전 임의 포트는
-// 쓸 수 없다. 대신 PORT_POOL(3000~3009) 중 비어있는 첫 포트를 선택한다.
-// Google Cloud Console 에 이 10개 포트의 redirect URI 가 모두 등록돼 있어야 한다:
-//   http://localhost:3000/dscode/api/auth/callback/google ... 3009
-// 선택된 포트는 자식 Next 의 AUTH_URL 로 주입돼 NextAuth 콜백도 같은 포트를 쓴다.
+// 포트 전략 — PORT_POOL(3000~3009) 중 비어있는 첫 포트를 선택한다. OAuth(Google) 는
+// "데스크톱 앱" 클라이언트를 쓴다. 데스크톱 클라이언트는 loopback redirect
+// (http://localhost:<포트>/...) 를 포트와 무관하게 자동 허용하므로, 포트별 redirect URI
+// 를 Google Cloud Console 에 등록할 필요가 없다.
+//   예: http://localhost:<선택포트>/dscode/api/auth/callback/google
+// 호스트는 반드시 localhost 로 통일한다 — Next 의 standalone 서버(next start)가 요청
+// URL 의 host 를 항상 'localhost' 로 만들고 NextAuth 가 그 origin 으로 redirect_uri 를
+// 만들기 때문이다(Host 헤더/127.0.0.1 로는 못 바꾼다). 그래서 창(BrowserWindow)·AUTH_URL·
+// 콜백을 전부 localhost 로 맞춰야 세션 쿠키 origin 이 일치한다.
+// 선택된 포트는 자식 Next 의 AUTH_URL 로 주입돼 NextAuth 세션/콜백도 같은 포트를 쓴다.
 //
 // DSCODE_NEXT_PORT 가 명시되면 그 포트 고정(개발용).
 const FIXED_PORT = process.env.DSCODE_NEXT_PORT
@@ -216,10 +221,11 @@ function buildChildEnv(token) {
   // 부모 셸이 심어둘 수 있는 다른 인증/auth 우회 변수도 정리 (CLI 가 OAuth/Bedrock 등으로 새지 않게)
   delete env.ANTHROPIC_AUTH_TOKEN
 
-  // NextAuth 콜백 URL 을 실제 선택된 포트에 맞춘다. 이게 없으면 .env.production 의
-  // 고정 AUTH_URL(3000) 을 쓰는데, 동적 포트면 Google 콜백이 엉뚱한 포트로 가서
-  // ERR_CONNECTION_REFUSED → 로그인 후 흰 화면이 난다.
-  // basePath 까지 포함한 형태여야 NextAuth 가 올바른 redirect_uri 를 만든다.
+  // NextAuth 의 세션/콜백 URL 을 실제 선택된 포트에 맞춘다. 이게 없으면 .env.production
+  // 의 고정 AUTH_URL(3000) 을 쓰는데, 동적 포트면 로그인 리다이렉트가 엉뚱한 포트로
+  // 가서 깨진다. 호스트는 localhost — Next 가 redirect_uri 의 host 를 localhost 로 강제
+  // 하므로(위 포트 전략 주석 참고) AUTH_URL·창(loadAppURL)·콜백을 전부 localhost 로
+  // 통일해야 세션 쿠키 origin 이 맞는다. basePath 까지 포함해야 올바른 redirect_uri 가 된다.
   if (!EXTERNAL_URL) {
     env.AUTH_URL = `http://localhost:${NEXT_PORT}/dscode/api/auth`
     env.NEXTAUTH_URL = env.AUTH_URL
@@ -304,7 +310,7 @@ function spawnNext(token) {
 
 function pingNext(port) {
   return new Promise((resolve) => {
-    const req = http.get(`http://localhost:${port}/dscode`, (res) => {
+    const req = http.get(`http://127.0.0.1:${port}/dscode`, (res) => {
       res.resume()
       resolve(true)
     })
@@ -429,6 +435,9 @@ function createMainWindow() {
  */
 function loadAppURL() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  // localhost 로 로드 — Next 가 redirect_uri 를 localhost 로 강제하므로 창 origin 도
+  // localhost 여야 콜백(localhost)과 origin 이 같아 세션 쿠키가 유지된다. (127.0.0.1 로
+  // 로드하면 콜백이 localhost 로 와서 origin 불일치 → state 쿠키 유실 → 로그인 실패.)
   const url = EXTERNAL_URL || `http://localhost:${NEXT_PORT}/dscode`
   mainWindow.loadURL(url).catch((err) => loadErrorPage(url, err.message))
 }
@@ -460,7 +469,7 @@ async function bootstrapWithToken(token) {
   }
 
   // 포트가 고정되지 않았으면 PORT_POOL(3000~3009) 중 빈 포트 선택.
-  // OAuth redirect_uri 가 이 포트에 맞아야 하므로 Google Console 에 10개 등록 필수.
+  // 데스크톱 클라이언트가 loopback(localhost) 포트를 무시하므로 포트별 등록 불필요.
   if (!FIXED_PORT) {
     const picked = await pickPoolPort()
     if (picked) {

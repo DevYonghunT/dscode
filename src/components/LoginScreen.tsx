@@ -10,7 +10,7 @@ import { Emblem } from "./Emblem";
 // most likely culprit (redirect_uri_mismatch) right in that message.
 const ERROR_COPY: Record<string, string> = {
   Configuration:
-    "Google OAuth 설정에 문제가 있습니다.\n자주 발생하는 원인:\n1) Google Cloud Console의 OAuth client에 Authorized redirect URI로 정확히 다음 값이 등록돼 있는지 확인하세요:\nhttp://localhost:3000/dscode/api/auth/callback/google\n2) .env.local의 AUTH_GOOGLE_ID/SECRET이 진짜 값인지, 서버를 재시작했는지 확인하세요.",
+    "Google 로그인 설정에 문제가 있어요. 잠시 후 다시 시도해 주세요.\n계속되면 선생님께 알려주세요.\n[관리자 확인] Google Cloud Console의 OAuth 클라이언트가 '데스크톱 앱' 타입인지, 그 클라이언트 ID가 .env.production의 AUTH_GOOGLE_ID와 같은지 확인하세요. (데스크톱 앱이면 http://localhost 루프백 리디렉션이 포트와 무관하게 자동 허용됩니다.)",
   AccessDenied:
     "이 계정으로는 접속할 수 없습니다. @duksoo.hs.kr 학교 계정으로만 로그인할 수 있어요.",
   Verification: "이메일 인증에 실패했습니다. 다시 시도해주세요.",
