@@ -186,6 +186,10 @@ curl -sIL "https://github.com/DevYonghunT/dscode/releases/latest/download/DS.Cod
 4. **agentclass 사이트의 링크를 새 파일명으로 수정** — 파일:
    `~/Development/agentclass/src/app/dscode/page.tsx` 의 `DOWNLOADS` 상수
    (`macArm` / `macIntel` / `windows`, 현재 `DS.Code-0.1.0-...` → `DS.Code-0.2.0-...`).
+   - **같은 파일의 `RELEASES` 배열 맨 위에 새 항목 추가** — `{ version, date, notes }`
+     (버전·배포일·간단 설명). 다운로드 페이지의 "업데이트 내역" 카드에 표시된다.
+   - (로컬 워크트리가 지저분하면 `main` 의 이 파일을 `gh api -X PUT .../contents/...`
+     로 직접 커밋하는 게 확실 — push 시 Vercel 자동 배포.)
 5. **agentclass 를 Vercel 에 배포** — agentclass 는 별도 저장소이므로 수정만으로는
    사이트에 반영되지 않는다. agentclass 의 평소 배포 방식대로 배포한다(보통 main 푸시 시
    Vercel 자동 배포, 또는 `~/Development/agentclass` 에서 `npx vercel deploy --prod`).
